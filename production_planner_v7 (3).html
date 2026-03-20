@@ -108,17 +108,53 @@ table.orders tr:hover td{background:var(--color-background-secondary);}
 .parallel-group{display:flex;flex-direction:column;gap:4px;border:0.5px solid #5DCAA540;border-radius:var(--border-radius-md,8px);padding:5px 8px;background:#E1F5EE22;}
 .parallel-label{font-size:10px;color:#0F6E56;margin-bottom:2px;}
 .save-indicator{font-size:11px;color:var(--color-text-tertiary);margin-left:8px;transition:opacity 0.3s;}
+
+/* LOGIN & ADMIN STYLES */
+.login-overlay{position:fixed;inset:0;background:var(--color-background-tertiary,#f7f6f3);display:flex;align-items:center;justify-content:center;z-index:200;}
+.login-box{background:var(--color-background-primary,#fff);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg,12px);padding:2rem;width:360px;max-width:92vw;text-align:center;}
+.login-box h2{font-size:18px;font-weight:500;margin-bottom:4px;}
+.login-box .login-sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:1.5rem;}
+.login-box .field{text-align:left;}
+.login-box .login-err{color:#A32D2D;font-size:12px;margin-bottom:10px;min-height:18px;}
+.login-box .btn-primary{width:100%;padding:9px;font-size:14px;}
+.user-badge{font-size:11px;color:var(--color-text-secondary);display:flex;align-items:center;gap:6px;}
+.user-badge .role-tag{background:#EEEDFE;color:#3C3489;border-radius:99px;padding:1px 8px;font-size:10px;font-weight:500;}
+.user-badge .logout-btn{cursor:pointer;color:var(--color-text-secondary);text-decoration:underline;font-size:11px;background:none;border:none;font-family:inherit;}
+.user-badge .logout-btn:hover{color:#A32D2D;}
+.admin-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;}
+.admin-table th{text-align:left;padding:8px 12px;color:var(--color-text-secondary);font-weight:400;font-size:11px;border-bottom:0.5px solid var(--color-border-tertiary);text-transform:uppercase;letter-spacing:0.03em;}
+.admin-table td{padding:8px 12px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:middle;}
+.admin-table tr:hover td{background:var(--color-background-secondary);}
+.role-admin{background:#FCEBEB;color:#A32D2D;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500;}
+.role-operator{background:#E6F1FB;color:#0C447C;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500;}
+.role-viewer{background:#F1EFE8;color:#444441;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500;}
 </style>
 </head>
 <body>
-<div class="app" style="max-width:1400px;margin:0 auto;padding:1.25rem 1rem;">
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen" class="login-overlay">
+  <div class="login-box">
+    <h2>Production Planner</h2>
+    <div class="login-sub">Voyage Foods — Sign in to continue</div>
+    <div class="login-err" id="login-err"></div>
+    <div class="field"><label>Username</label><input id="login-user" placeholder="Enter username" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+    <div class="field" style="margin-bottom:1.25rem;"><label>Password</label><input id="login-pass" type="password" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+    <button class="btn btn-primary" onclick="doLogin()">Sign in</button>
+  </div>
+</div>
+
+<div class="app" style="max-width:1400px;margin:0 auto;padding:1.25rem 1rem;display:none;" id="main-app">
 
   <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1.25rem;">
     <div style="display:flex;align-items:baseline;gap:10px;">
       <span style="font-size:18px;font-weight:500;">Production Planner</span>
       <span style="font-size:12px;color:var(--color-text-secondary);">Voyage Foods</span>
     </div>
-    <span class="save-indicator" id="save-ind"></span>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="save-indicator" id="save-ind"></span>
+      <div class="user-badge" id="user-badge"></div>
+    </div>
   </div>
 
   <div id="notice" class="notice" style="display:none;"></div>
@@ -126,7 +162,8 @@ table.orders tr:hover td{background:var(--color-background-secondary);}
   <div class="tabs">
     <button class="tab active" onclick="switchTab('calendar')">Calendar</button>
     <button class="tab" onclick="switchTab('orders')">Work orders</button>
-    <button class="tab" onclick="switchTab('capacity')">Capacity & ops</button>
+    <button class="tab" onclick="switchTab('capacity')">Capacity &amp; ops</button>
+    <button class="tab" onclick="switchTab('admin')" id="tab-admin-btn" style="display:none;">Admin console</button>
   </div>
 
   <!-- CALENDAR -->
@@ -196,6 +233,48 @@ table.orders tr:hover td{background:var(--color-background-secondary);}
       <div><strong style="color:var(--color-text-primary);">Roasting yield:</strong> ~68–73%. First batch post-changeover may be scrap/QA hold.</div>
     </div>
   </div>
+
+  <!-- ADMIN CONSOLE -->
+  <div id="tab-admin" style="display:none;">
+    <div class="header">
+      <h2>Admin Console — User Management</h2>
+      <button class="btn btn-primary" onclick="openUserModal()">+ New user</button>
+    </div>
+    <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md,8px);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--color-text-secondary);">
+      <strong style="color:var(--color-text-primary);">Roles:</strong>
+      <span class="role-admin" style="margin-left:6px;">Admin</span> Full access + user management
+      <span class="role-operator" style="margin-left:10px;">Operator</span> Create & edit orders
+      <span class="role-viewer" style="margin-left:10px;">Viewer</span> Read-only access
+    </div>
+    <table class="admin-table" id="admin-user-table">
+      <thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="admin-user-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- USER MODAL -->
+<div id="user-modal" style="display:none;">
+<div class="modal-overlay" onclick="if(event.target===event.currentTarget)closeUserModal()">
+<div class="modal" style="width:400px;">
+  <h2 id="um-title">New user</h2>
+  <div class="field"><label>Username</label><input id="um-user" placeholder="Enter username"/></div>
+  <div class="field"><label>Password</label><input id="um-pass" type="password" placeholder="Enter password"/></div>
+  <div class="field"><label>Confirm password</label><input id="um-pass2" type="password" placeholder="Re-enter password"/></div>
+  <div class="field"><label>Role</label>
+    <select id="um-role">
+      <option value="viewer">Viewer — Read-only</option>
+      <option value="operator">Operator — Create & edit orders</option>
+      <option value="admin">Admin — Full access</option>
+    </select>
+  </div>
+  <div class="login-err" id="um-err" style="margin-top:8px;"></div>
+  <div class="modal-actions">
+    <button class="btn" onclick="closeUserModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveUser()">Save user</button>
+  </div>
+</div>
+</div>
 </div>
 
 <!-- MODAL -->
@@ -285,6 +364,170 @@ table.orders tr:hover td{background:var(--color-background-secondary);}
 </div>
 
 <script>
+/* ===== AUTH & USER MANAGEMENT ===== */
+let currentUser=null, users=[], editingUserId=null;
+
+function hashPassword(pw){
+  let h=0;
+  for(let i=0;i<pw.length;i++){h=((h<<5)-h)+pw.charCodeAt(i);h|=0;}
+  return 'h_'+Math.abs(h).toString(36)+'_'+pw.length;
+}
+
+async function loadUsers(){
+  try{
+    if(window.storage){
+      const r=await window.storage.get('vf_users');
+      users=r&&r.value?JSON.parse(r.value):[];
+    }else{
+      const s=localStorage.getItem('vf_users');
+      users=s?JSON.parse(s):[];
+    }
+  }catch(e){users=[];}
+  if(!users.length){
+    users=[{id:'master',username:'admin',password:hashPassword('admin123'),role:'admin',created:'2026-01-01'}];
+    await persistUsers();
+  }
+}
+async function persistUsers(){
+  try{
+    if(window.storage)await window.storage.set('vf_users',JSON.stringify(users));
+    else localStorage.setItem('vf_users',JSON.stringify(users));
+  }catch(e){}
+}
+
+function doLogin(){
+  const uEl=document.getElementById('login-user'),pEl=document.getElementById('login-pass');
+  const username=uEl.value.trim().toLowerCase(),password=pEl.value;
+  if(!username||!password){document.getElementById('login-err').textContent='Please enter username and password.';return;}
+  const user=users.find(u=>u.username.toLowerCase()===username&&u.password===hashPassword(password));
+  if(!user){document.getElementById('login-err').textContent='Invalid username or password.';return;}
+  currentUser=user;
+  try{sessionStorage.setItem('vf_session',JSON.stringify({id:user.id,username:user.username,role:user.role}));}catch(e){}
+  showApp();
+}
+function doLogout(){
+  currentUser=null;
+  try{sessionStorage.removeItem('vf_session');}catch(e){}
+  document.getElementById('main-app').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-user').value='';
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-err').textContent='';
+}
+function tryResumeSession(){
+  try{
+    const s=sessionStorage.getItem('vf_session');
+    if(s){
+      const sess=JSON.parse(s);
+      const user=users.find(u=>u.id===sess.id);
+      if(user){currentUser=user;showApp();return true;}
+    }
+  }catch(e){}
+  return false;
+}
+
+function showApp(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('main-app').style.display='';
+  const isAdmin=currentUser.role==='admin';
+  document.getElementById('tab-admin-btn').style.display=isAdmin?'':'none';
+  document.getElementById('user-badge').innerHTML=
+    `<span>${currentUser.username}</span>`+
+    `<span class="role-tag">${currentUser.role}</span>`+
+    `<button class="logout-btn" onclick="doLogout()">Sign out</button>`;
+  applyPermissions();
+  renderCal();
+}
+
+function applyPermissions(){
+  const role=currentUser.role;
+  const canEdit=role==='admin'||role==='operator';
+  document.querySelectorAll('.btn-primary').forEach(b=>{
+    if(b.textContent.includes('New order'))b.style.display=canEdit?'':'none';
+  });
+}
+
+function canEditOrders(){return currentUser&&(currentUser.role==='admin'||currentUser.role==='operator');}
+
+/* ADMIN USER CRUD */
+function renderUsers(){
+  const body=document.getElementById('admin-user-body');
+  if(!body)return;
+  body.innerHTML=users.map(u=>`<tr>
+    <td style="font-weight:500;">${u.username}${u.id==='master'?' <span style="font-size:10px;color:var(--color-text-tertiary);">(master)</span>':''}</td>
+    <td><span class="role-${u.role}">${u.role.charAt(0).toUpperCase()+u.role.slice(1)}</span></td>
+    <td style="font-size:12px;color:var(--color-text-secondary);">${u.created||'—'}</td>
+    <td>
+      <button class="btn btn-sm" onclick="openUserModal('${u.id}')">Edit</button>
+      ${u.id!=='master'?`<button class="btn btn-sm btn-danger" style="margin-left:4px;" onclick="deleteUser('${u.id}')">Delete</button>`:''}
+    </td>
+  </tr>`).join('');
+}
+
+function openUserModal(userId){
+  editingUserId=null;
+  document.getElementById('um-title').textContent='New user';
+  document.getElementById('um-user').value='';
+  document.getElementById('um-pass').value='';
+  document.getElementById('um-pass2').value='';
+  document.getElementById('um-role').value='viewer';
+  document.getElementById('um-err').textContent='';
+  document.getElementById('um-user').disabled=false;
+  if(userId){
+    const u=users.find(x=>x.id===userId);
+    if(!u)return;
+    editingUserId=userId;
+    document.getElementById('um-title').textContent='Edit — '+u.username;
+    document.getElementById('um-user').value=u.username;
+    document.getElementById('um-user').disabled=(userId==='master');
+    document.getElementById('um-role').value=u.role;
+  }
+  document.getElementById('user-modal').style.display='flex';
+}
+function closeUserModal(){document.getElementById('user-modal').style.display='none';}
+
+function saveUser(){
+  const username=document.getElementById('um-user').value.trim().toLowerCase();
+  const pw=document.getElementById('um-pass').value;
+  const pw2=document.getElementById('um-pass2').value;
+  const role=document.getElementById('um-role').value;
+  const err=document.getElementById('um-err');
+
+  if(!username){err.textContent='Username is required.';return;}
+  if(username.length<3){err.textContent='Username must be at least 3 characters.';return;}
+  if(!editingUserId&&!pw){err.textContent='Password is required.';return;}
+  if(pw&&pw.length<6){err.textContent='Password must be at least 6 characters.';return;}
+  if(pw&&pw!==pw2){err.textContent='Passwords do not match.';return;}
+
+  const dup=users.find(u=>u.username.toLowerCase()===username&&u.id!==editingUserId);
+  if(dup){err.textContent='Username already exists.';return;}
+
+  if(editingUserId){
+    const u=users.find(x=>x.id===editingUserId);
+    if(!u)return;
+    if(editingUserId!=='master')u.username=username;
+    u.role=role;
+    if(pw)u.password=hashPassword(pw);
+    if(currentUser.id===editingUserId){currentUser=u;showApp();}
+  }else{
+    users.push({
+      id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+      username,
+      password:hashPassword(pw),
+      role,
+      created:new Date().toISOString().slice(0,10)
+    });
+  }
+  persistUsers();closeUserModal();renderUsers();
+}
+
+function deleteUser(id){
+  if(!confirm('Delete this user?'))return;
+  if(id==='master'){alert('Cannot delete the master admin.');return;}
+  users=users.filter(u=>u.id!==id);
+  persistUsers();renderUsers();
+}
+
 const SUBTYPES={coffee:[{v:'coffee_beans',l:'Roast beans'},{v:'coffee_ground',l:'Roast & ground'}],liquor:[{v:'liquor',l:'Chocolate liquor'}],chocolate:[{v:'chocolate',l:'Finished chocolate'}]};
 const BATCH_C={coffee_beans:{fixed:325},coffee_ground:{fixed:1000},liquor:{min:2250,max:4300},chocolate:{min:3000,max:6000}};
 const PROD_LABELS={coffee_beans:'Coffee — Roast beans',coffee_ground:'Coffee — Roast & ground',liquor:'Chocolate liquor',chocolate:'Finished chocolate'};
@@ -307,20 +550,34 @@ const SEED=[
 let orders=[],collapsed={},editingId=null,calOffset=0,storageOK=false;
 
 async function init(){
-  try{
-    await window.storage.set('_ping','1');
-    const r=await window.storage.get('_ping');
-    storageOK=!!(r&&r.value);
-  }catch(e){storageOK=false;}
+  if(window.storage){
+    try{
+      await window.storage.set('_ping','1');
+      const r=await window.storage.get('_ping');
+      storageOK=!!(r&&r.value);
+    }catch(e){storageOK=false;}
+  }else{
+    storageOK=!!window.localStorage;
+  }
   const n=document.getElementById('notice');
   if(!storageOK){n.style.display='block';n.textContent='⚠ Persistent storage not active — publish this artifact to enable it.';}
   try{
-    const r=await window.storage.get('vf_orders');
-    orders=r&&r.value?JSON.parse(r.value):JSON.parse(JSON.stringify(SEED));
-    if(!r||!r.value) await persist();
+    let raw;
+    if(window.storage){const r=await window.storage.get('vf_orders');raw=r&&r.value?r.value:null;}
+    else{raw=localStorage.getItem('vf_orders');}
+    orders=raw?JSON.parse(raw):JSON.parse(JSON.stringify(SEED));
+    if(!raw) await persist();
   }catch(e){orders=JSON.parse(JSON.stringify(SEED));}
-  try{const r=await window.storage.get('vf_collapsed');if(r&&r.value)collapsed=JSON.parse(r.value);}catch(e){}
-  renderCal();
+  try{
+    let raw;
+    if(window.storage){const r=await window.storage.get('vf_collapsed');raw=r&&r.value?r.value:null;}
+    else{raw=localStorage.getItem('vf_collapsed');}
+    if(raw)collapsed=JSON.parse(raw);
+  }catch(e){}
+  await loadUsers();
+  if(!tryResumeSession()){
+    document.getElementById('login-screen').style.display='flex';
+  }
 }
 
 async function persist(){
@@ -328,8 +585,13 @@ async function persist(){
   const ind=document.getElementById('save-ind');
   ind.textContent='Saving…';ind.style.opacity='1';
   try{
-    await window.storage.set('vf_orders',JSON.stringify(orders));
-    await window.storage.set('vf_collapsed',JSON.stringify(collapsed));
+    if(window.storage){
+      await window.storage.set('vf_orders',JSON.stringify(orders));
+      await window.storage.set('vf_collapsed',JSON.stringify(collapsed));
+    }else{
+      localStorage.setItem('vf_orders',JSON.stringify(orders));
+      localStorage.setItem('vf_collapsed',JSON.stringify(collapsed));
+    }
     ind.textContent='Saved ✓';setTimeout(()=>{ind.style.opacity='0';},2000);
   }catch(e){ind.textContent='Save failed';setTimeout(()=>{ind.style.opacity='0';},3000);}
 }
@@ -352,10 +614,16 @@ function shortSku(s){
 }
 
 function switchTab(t){
-  ['calendar','orders','capacity'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
-  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['calendar','orders','capacity'][i]===t));
+  if(t==='admin'&&(!currentUser||currentUser.role!=='admin'))return;
+  ['calendar','orders','capacity','admin'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
+  document.querySelectorAll('.tab').forEach(el=>{
+    const tabName=el.textContent.trim().toLowerCase();
+    const map={'calendar':'calendar','work orders':'orders','capacity & ops':'capacity','capacity &amp; ops':'capacity','admin console':'admin'};
+    el.classList.toggle('active',map[tabName]===t);
+  });
   if(t==='calendar')renderCal();
   if(t==='orders')render();
+  if(t==='admin')renderUsers();
 }
 function shiftCal(d){calOffset+=d*4;renderCal();}
 function resetCal(){calOffset=0;renderCal();}
@@ -446,6 +714,7 @@ function calcBOM(){
 }
 
 function openModal(prefill,mk,ds){
+  if(!canEditOrders()){alert('You do not have permission to create or edit orders.');return;}
   editingId=null;
   document.getElementById('mtitle').textContent='New work order';
   ['f-oid','f-due','f-start','f-end','f-qty','f-notes','f-sku'].forEach(id=>{document.getElementById(id).value='';});
@@ -515,6 +784,7 @@ function saveOrder(){
   persist();closeModal();render();renderCal();
 }
 function deleteOrder(id){
+  if(!canEditOrders()){alert('You do not have permission to delete orders.');return;}
   if(!confirm('Delete this order?'))return;
   orders=orders.filter(o=>o.id!==id);persist();render();renderCal();
 }
@@ -549,8 +819,8 @@ function render(){
             <td><span class="badge badge-${o.priority||'low'}">${{high:'High',med:'Med',low:'Low'}[o.priority]||'—'}</span></td>
             <td><span class="badge badge-${o.status}">${{queued:'Queued','in-progress':'In progress','on-hold':'On hold',complete:'Complete'}[o.status]||o.status}</span></td>
             <td style="white-space:nowrap;">
-              <button class="btn btn-sm" onclick="editById('${o.id}')">Edit</button>
-              <button class="btn btn-sm btn-danger" style="margin-left:4px;" onclick="deleteOrder('${o.id}')">Del</button>
+              ${canEditOrders()?`<button class="btn btn-sm" onclick="editById('${o.id}')">Edit</button>
+              <button class="btn btn-sm btn-danger" style="margin-left:4px;" onclick="deleteOrder('${o.id}')">Del</button>`:''}
             </td>
           </tr>`;
         }).join('')}</tbody>
