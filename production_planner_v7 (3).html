@@ -375,14 +375,14 @@ function hashPassword(pw){
 
 async function loadUsers(){
   try{
-    if(window.storage){
-      const r=await window.storage.get('vf_users');
-      users=r&&r.value?JSON.parse(r.value):[];
-    }else{
+    const resp=await fetch('/api/users');
+    if(resp.ok){const data=await resp.json();if(data&&data.length)users=data;}
+  }catch(e){
+    try{
       const s=localStorage.getItem('vf_users');
       users=s?JSON.parse(s):[];
-    }
-  }catch(e){users=[];}
+    }catch(e2){users=[];}
+  }
   if(!users.length){
     users=[{id:'master',username:'admin',password:hashPassword('admin123'),role:'admin',created:'2026-01-01'}];
     await persistUsers();
@@ -390,9 +390,10 @@ async function loadUsers(){
 }
 async function persistUsers(){
   try{
-    if(window.storage)await window.storage.set('vf_users',JSON.stringify(users));
-    else localStorage.setItem('vf_users',JSON.stringify(users));
-  }catch(e){}
+    await fetch('/api/users',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(users)});
+  }catch(e){
+    try{localStorage.setItem('vf_users',JSON.stringify(users));}catch(e2){}
+  }
 }
 
 function doLogin(){
@@ -550,30 +551,40 @@ const SEED=[
 let orders=[],collapsed={},editingId=null,calOffset=0,storageOK=false;
 
 async function init(){
-  if(window.storage){
-    try{
-      await window.storage.set('_ping','1');
-      const r=await window.storage.get('_ping');
-      storageOK=!!(r&&r.value);
-    }catch(e){storageOK=false;}
-  }else{
-    storageOK=!!window.localStorage;
-  }
+  // Check if backend API is available (PostgreSQL persistence)
+  let apiOK=false;
+  try{
+    const resp=await fetch('/health');
+    apiOK=resp.ok;
+  }catch(e){apiOK=false;}
+
+  storageOK=apiOK||!!window.localStorage;
   const n=document.getElementById('notice');
-  if(!storageOK){n.style.display='block';n.textContent='⚠ Persistent storage not active — publish this artifact to enable it.';}
+  if(!storageOK){n.style.display='block';n.textContent='⚠ Persistent storage not active — data will not be saved between sessions.';}
+
+  // Load orders
   try{
-    let raw;
-    if(window.storage){const r=await window.storage.get('vf_orders');raw=r&&r.value?r.value:null;}
-    else{raw=localStorage.getItem('vf_orders');}
-    orders=raw?JSON.parse(raw):JSON.parse(JSON.stringify(SEED));
-    if(!raw) await persist();
+    if(apiOK){
+      const resp=await fetch('/api/orders');
+      if(resp.ok){const data=await resp.json();if(data&&data.length)orders=data;else{orders=JSON.parse(JSON.stringify(SEED));await persist();}}
+    }else{
+      const raw=localStorage.getItem('vf_orders');
+      orders=raw?JSON.parse(raw):JSON.parse(JSON.stringify(SEED));
+      if(!raw) await persist();
+    }
   }catch(e){orders=JSON.parse(JSON.stringify(SEED));}
+
+  // Load collapsed state
   try{
-    let raw;
-    if(window.storage){const r=await window.storage.get('vf_collapsed');raw=r&&r.value?r.value:null;}
-    else{raw=localStorage.getItem('vf_collapsed');}
-    if(raw)collapsed=JSON.parse(raw);
+    if(apiOK){
+      const resp=await fetch('/api/state/collapsed');
+      if(resp.ok){const data=await resp.json();if(data)collapsed=data;}
+    }else{
+      const raw=localStorage.getItem('vf_collapsed');
+      if(raw)collapsed=JSON.parse(raw);
+    }
   }catch(e){}
+
   await loadUsers();
   if(!tryResumeSession()){
     document.getElementById('login-screen').style.display='flex';
@@ -585,10 +596,11 @@ async function persist(){
   const ind=document.getElementById('save-ind');
   ind.textContent='Saving…';ind.style.opacity='1';
   try{
-    if(window.storage){
-      await window.storage.set('vf_orders',JSON.stringify(orders));
-      await window.storage.set('vf_collapsed',JSON.stringify(collapsed));
-    }else{
+    // Try API first (PostgreSQL), fall back to localStorage
+    try{
+      await fetch('/api/orders',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(orders)});
+      await fetch('/api/state/collapsed',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(collapsed)});
+    }catch(e){
       localStorage.setItem('vf_orders',JSON.stringify(orders));
       localStorage.setItem('vf_collapsed',JSON.stringify(collapsed));
     }
