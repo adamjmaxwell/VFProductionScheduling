@@ -373,9 +373,25 @@ function hashPassword(pw){
   return 'h_'+Math.abs(h).toString(36)+'_'+pw.length;
 }
 
+async function serverGet(key){
+  try{
+    const r=await fetch('/api/data/'+key);
+    if(!r.ok)return null;
+    const j=await r.json();
+    return j.exists?j.value:null;
+  }catch(e){return null;}
+}
+async function serverPut(key,value){
+  try{
+    const r=await fetch('/api/data/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({value})});
+    return r.ok;
+  }catch(e){return false;}
+}
 async function loadUsers(){
   try{
-    if(window.storage){
+    let data=await serverGet('vf_users');
+    if(data){users=data;}
+    else if(window.storage){
       const r=await window.storage.get('vf_users');
       users=r&&r.value?JSON.parse(r.value):[];
     }else{
@@ -390,8 +406,11 @@ async function loadUsers(){
 }
 async function persistUsers(){
   try{
-    if(window.storage)await window.storage.set('vf_users',JSON.stringify(users));
-    else localStorage.setItem('vf_users',JSON.stringify(users));
+    const ok=await serverPut('vf_users',users);
+    if(!ok){
+      if(window.storage)await window.storage.set('vf_users',JSON.stringify(users));
+      else localStorage.setItem('vf_users',JSON.stringify(users));
+    }
   }catch(e){}
 }
 
@@ -562,17 +581,26 @@ async function init(){
   const n=document.getElementById('notice');
   if(!storageOK){n.style.display='block';n.textContent='⚠ Persistent storage not active — publish this artifact to enable it.';}
   try{
-    let raw;
-    if(window.storage){const r=await window.storage.get('vf_orders');raw=r&&r.value?r.value:null;}
-    else{raw=localStorage.getItem('vf_orders');}
-    orders=raw?JSON.parse(raw):JSON.parse(JSON.stringify(SEED));
-    if(!raw) await persist();
+    let data=await serverGet('vf_orders');
+    if(data){orders=data;}
+    else{
+      let raw;
+      if(window.storage){const r=await window.storage.get('vf_orders');raw=r&&r.value?r.value:null;}
+      else{raw=localStorage.getItem('vf_orders');}
+      orders=raw?JSON.parse(raw):JSON.parse(JSON.stringify(SEED));
+    }
+    if(!orders.length) {orders=JSON.parse(JSON.stringify(SEED));}
+    await persist();
   }catch(e){orders=JSON.parse(JSON.stringify(SEED));}
   try{
-    let raw;
-    if(window.storage){const r=await window.storage.get('vf_collapsed');raw=r&&r.value?r.value:null;}
-    else{raw=localStorage.getItem('vf_collapsed');}
-    if(raw)collapsed=JSON.parse(raw);
+    let data=await serverGet('vf_collapsed');
+    if(data){collapsed=data;}
+    else{
+      let raw;
+      if(window.storage){const r=await window.storage.get('vf_collapsed');raw=r&&r.value?r.value:null;}
+      else{raw=localStorage.getItem('vf_collapsed');}
+      if(raw)collapsed=JSON.parse(raw);
+    }
   }catch(e){}
   await loadUsers();
   if(!tryResumeSession()){
@@ -581,16 +609,19 @@ async function init(){
 }
 
 async function persist(){
-  if(!storageOK)return;
   const ind=document.getElementById('save-ind');
   ind.textContent='Saving…';ind.style.opacity='1';
   try{
-    if(window.storage){
-      await window.storage.set('vf_orders',JSON.stringify(orders));
-      await window.storage.set('vf_collapsed',JSON.stringify(collapsed));
-    }else{
-      localStorage.setItem('vf_orders',JSON.stringify(orders));
-      localStorage.setItem('vf_collapsed',JSON.stringify(collapsed));
+    const ok1=await serverPut('vf_orders',orders);
+    const ok2=await serverPut('vf_collapsed',collapsed);
+    if(!ok1||!ok2){
+      if(window.storage){
+        await window.storage.set('vf_orders',JSON.stringify(orders));
+        await window.storage.set('vf_collapsed',JSON.stringify(collapsed));
+      }else{
+        localStorage.setItem('vf_orders',JSON.stringify(orders));
+        localStorage.setItem('vf_collapsed',JSON.stringify(collapsed));
+      }
     }
     ind.textContent='Saved ✓';setTimeout(()=>{ind.style.opacity='0';},2000);
   }catch(e){ind.textContent='Save failed';setTimeout(()=>{ind.style.opacity='0';},3000);}
