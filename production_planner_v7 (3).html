@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Production Planner — Voyage Foods</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font-sans,'Georgia',serif);font-size:14px;color:var(--color-text-primary,#1a1916);background:var(--color-background-tertiary,#f7f6f3);}
+.app{padding:1.25rem 0;}
+.tabs{display:flex;gap:4px;margin-bottom:1.25rem;border-bottom:0.5px solid var(--color-border-tertiary);padding-bottom:0;}
+.tab{padding:7px 14px;font-size:13px;cursor:pointer;border:none;background:none;color:var(--color-text-secondary);font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-1px;}
+.tab:hover{color:var(--color-text-primary);}
+.tab.active{color:var(--color-text-primary);border-bottom-color:var(--color-text-primary);font-weight:500;}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;gap:8px;flex-wrap:wrap;}
+.header h2{font-size:16px;font-weight:500;}
+.btn{background:transparent;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md,8px);padding:6px 13px;font-size:13px;cursor:pointer;color:var(--color-text-primary);font-family:inherit;}
+.btn:hover{background:var(--color-background-secondary);}
+.btn-primary{background:var(--color-text-primary);color:var(--color-background-primary);border-color:var(--color-text-primary);}
+.btn-primary:hover{opacity:0.85;}
+.btn-sm{padding:3px 9px;font-size:12px;}
+.btn-danger{color:#A32D2D;border-color:#A32D2D22;}
+.btn-danger:hover{background:#FCEBEB;}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:1.25rem;}
+.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md,8px);padding:10px 12px;}
+.metric-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:3px;}
+.metric-value{font-size:20px;font-weight:500;}
+.cal-wrap{overflow-x:auto;}
+.cal-table{border-collapse:collapse;min-width:100%;font-size:11px;}
+.cal-table th{padding:4px 6px;font-weight:400;white-space:nowrap;border:0.5px solid var(--color-border-tertiary);background:var(--color-background-secondary);color:var(--color-text-secondary);}
+.cal-table td{padding:3px 4px;border:0.5px solid var(--color-border-tertiary);vertical-align:top;min-width:96px;max-width:130px;}
+.zone-row th{background:#F1EFE8;color:#444441;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.05em;padding:5px 6px;}
+.machine-label{font-size:11px;font-weight:500;white-space:nowrap;padding:5px 8px;background:var(--color-background-secondary);color:var(--color-text-primary);min-width:115px;max-width:130px;}
+.cal-cell{min-height:52px;cursor:pointer;background:var(--color-background-primary);}
+.cal-cell:hover{background:var(--color-background-secondary) !important;}
+.cal-cell.today-col{background:#E6F1FB11 !important;}
+.day-hdr{text-align:center;min-width:96px;}
+.day-hdr .dow{font-size:10px;color:var(--color-text-tertiary);display:block;}
+.day-hdr .date{font-size:12px;font-weight:500;}
+.day-hdr.today-hdr .date{color:#185FA5;}
+.week-sep{border-left:2px solid var(--color-border-secondary) !important;}
+.mo-block{border-radius:4px;padding:3px 5px;margin:2px 0;cursor:pointer;transition:opacity 0.1s;}
+.mo-block:hover{opacity:0.82;}
+.mo-block .mo-id{font-size:10px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mo-block .mo-sku{font-size:9px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.mo-block .mo-qty{font-size:9px;opacity:0.8;margin-top:1px;white-space:nowrap;}
+.mo-cbe{background:#E6F1FB;color:#0C447C;}
+.mo-cbs{background:#E1F5EE;color:#085041;}
+.mo-choc{background:#EEEDFE;color:#3C3489;}
+.mo-roast{background:#FAEEDA;color:#633806;}
+.mo-grind{background:#F1EFE8;color:#444441;}
+.mo-empty{color:var(--color-text-tertiary);font-size:10px;padding:4px;}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg,12px);margin-bottom:10px;overflow:hidden;}
+.card-header{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;background:var(--color-background-secondary);}
+.card-title{font-size:13px;font-weight:500;flex:1;}
+.card-meta{font-size:12px;color:var(--color-text-secondary);}
+.chevron{font-size:10px;color:var(--color-text-tertiary);transition:transform 0.15s;}
+.chevron.open{transform:rotate(90deg);}
+table.orders{width:100%;border-collapse:collapse;font-size:13px;}
+table.orders th{text-align:left;padding:6px 12px;color:var(--color-text-secondary);font-weight:400;font-size:11px;border-bottom:0.5px solid var(--color-border-tertiary);}
+table.orders td{padding:7px 12px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:middle;}
+table.orders tr:last-child td{border-bottom:none;}
+table.orders tr:hover td{background:var(--color-background-secondary);}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;}
+.badge-queued{background:#F1EFE8;color:#444441;}
+.badge-in-progress{background:#E6F1FB;color:#0C447C;}
+.badge-complete{background:#EAF3DE;color:#27500A;}
+.badge-on-hold{background:#FAEEDA;color:#633806;}
+.badge-high{background:#FCEBEB;color:#A32D2D;}
+.badge-med{background:#FAEEDA;color:#633806;}
+.badge-low{background:#F1EFE8;color:#444441;}
+.empty{text-align:center;padding:2rem;color:var(--color-text-secondary);font-size:13px;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:100;}
+.modal{background:var(--color-background-primary);border-radius:var(--border-radius-lg,12px);border:0.5px solid var(--color-border-tertiary);padding:1.5rem;width:520px;max-width:96vw;max-height:90vh;overflow-y:auto;}
+.modal h2{font-size:16px;font-weight:500;margin-bottom:1.25rem;}
+.field{margin-bottom:10px;}
+.field label{display:block;font-size:11px;color:var(--color-text-secondary);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.03em;}
+.field input,.field select,.field textarea{width:100%;padding:7px 10px;font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md,8px);background:var(--color-background-primary);color:var(--color-text-primary);font-family:inherit;}
+.field textarea{resize:vertical;min-height:56px;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem;}
+.section-title{font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin:14px 0 6px;}
+.info-box{background:#E6F1FB;color:#0C447C;border-radius:var(--border-radius-md,8px);padding:8px 12px;font-size:12px;margin-bottom:10px;}
+.warn{background:#FAEEDA;color:#633806;border-radius:var(--border-radius-md,8px);padding:8px 12px;font-size:12px;margin-bottom:10px;}
+.notice{background:#FAEEDA;color:#633806;border-radius:var(--border-radius-md,8px);padding:9px 12px;font-size:12px;margin-bottom:1rem;}
+.divider{border:none;border-top:0.5px solid var(--color-border-tertiary);margin:12px 0;}
+.zone-header{font-size:12px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px;padding-bottom:4px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.machine-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:8px;}
+.machine-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md,8px);padding:11px 13px;border:0.5px solid var(--color-border-tertiary);}
+.machine-card.cbs{border-left:3px solid #1D9E75;}
+.machine-card.cbe{border-left:3px solid #378ADD;}
+.machine-name{font-size:12px;font-weight:500;margin-bottom:3px;}
+.machine-detail{font-size:11px;color:var(--color-text-secondary);line-height:1.6;}
+.tag{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:500;margin-bottom:4px;}
+.tag-cbs{background:#E1F5EE;color:#085041;}
+.tag-cbe{background:#E6F1FB;color:#0C447C;}
+.cal-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.cal-period{font-size:12px;color:var(--color-text-secondary);}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--color-text-secondary);}
+.legend-dot{width:10px;height:10px;border-radius:2px;}
+.op-chip{background:#EEEDFE;color:#3C3489;border-radius:99px;padding:2px 9px;font-size:11px;font-weight:500;}
+.op-chip-pre{background:#FAEEDA;color:#633806;border-radius:99px;padding:2px 9px;font-size:11px;font-weight:500;}
+.op-chip-parallel{background:#E1F5EE;color:#085041;border-radius:var(--border-radius-md,8px);padding:4px 9px;font-size:11px;font-weight:500;}
+.op-arrow{color:var(--color-text-tertiary);font-size:11px;}
+.op-pipeline{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;}
+.parallel-group{display:flex;flex-direction:column;gap:4px;border:0.5px solid #5DCAA540;border-radius:var(--border-radius-md,8px);padding:5px 8px;background:#E1F5EE22;}
+.parallel-label{font-size:10px;color:#0F6E56;margin-bottom:2px;}
+.save-indicator{font-size:11px;color:var(--color-text-tertiary);margin-left:8px;transition:opacity 0.3s;}
+</style>
+</head>
+<body>
+<div class="app" style="max-width:1400px;margin:0 auto;padding:1.25rem 1rem;">
+
+  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1.25rem;">
+    <div style="display:flex;align-items:baseline;gap:10px;">
+      <span style="font-size:18px;font-weight:500;">Production Planner</span>
+      <span style="font-size:12px;color:var(--color-text-secondary);">Voyage Foods</span>
+    </div>
+    <span class="save-indicator" id="save-ind"></span>
+  </div>
+
+  <div id="notice" class="notice" style="display:none;"></div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('calendar')">Calendar</button>
+    <button class="tab" onclick="switchTab('orders')">Work orders</button>
+    <button class="tab" onclick="switchTab('capacity')">Capacity & ops</button>
+  </div>
+
+  <!-- CALENDAR -->
+  <div id="tab-calendar">
+    <div class="header">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <h2>4-week schedule</h2>
+        <button class="btn btn-primary btn-sm" onclick="openModal()">+ New order</button>
+      </div>
+      <div class="cal-nav">
+        <button class="btn btn-sm" onclick="shiftCal(-1)">← Back</button>
+        <span class="cal-period" id="cal-period"></span>
+        <button class="btn btn-sm" onclick="shiftCal(1)">Forward →</button>
+        <button class="btn btn-sm" onclick="resetCal()">Today</button>
+      </div>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#B5D4F4;"></div>CBE liquor</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#9FE1CB;"></div>CBS liquor</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#CECBF6;"></div>Finished chocolate</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#FAC775;"></div>Roasting</div>
+    </div>
+    <div class="cal-wrap"><table class="cal-table" id="cal-table"></table></div>
+  </div>
+
+  <!-- ORDERS -->
+  <div id="tab-orders" style="display:none;">
+    <div class="header"><h2>Work orders</h2><button class="btn btn-primary" onclick="openModal()">+ New order</button></div>
+    <div class="metrics" id="metrics"></div>
+    <div id="board"></div>
+  </div>
+
+  <!-- CAPACITY -->
+  <div id="tab-capacity" style="display:none;">
+    <div class="header"><h2>Operations & capacity</h2></div>
+    <div class="zone-header">Zone 1 — Seed prep & roasting</div>
+    <div class="machine-grid">
+      <div class="machine-card"><div class="machine-name">Seed cleaning</div><div class="machine-detail">Pre-roasting · Chocolate &amp; Coffee</div></div>
+      <div class="machine-card"><div class="machine-name">Roaster (Alk/Roaster)</div><div class="machine-detail">Batch output: <strong>325 kg</strong> · Up to 4 batches/shift</div></div>
+    </div>
+    <div class="zone-header">Zone 1 — Mcintyres</div>
+    <div class="machine-grid">
+      <div class="machine-card cbs"><div class="tag tag-cbs">Non-tempering · CBS</div><div class="machine-name">East Mcintyre — 5,000 kg</div><div class="machine-detail">Min: <strong>2,250 kg</strong> / Max: <strong>4,300 kg</strong> · EU/US not mixed</div></div>
+      <div class="machine-card cbe"><div class="tag tag-cbe">Tempering · CBE</div><div class="machine-name">West Mcintyre — 5,000 kg</div><div class="machine-detail">Min: <strong>2,250 kg</strong> / Max: <strong>4,300 kg</strong> · EU/US not mixed</div></div>
+      <div class="machine-card" style="opacity:0.6;"><div class="machine-name">1,250 kg Mcintyre</div><div class="machine-detail">Min: <strong>600 kg</strong> / Max: <strong>1,000 kg</strong> · Not in active scope</div></div>
+      <div class="machine-card"><div class="machine-name">5k Mac Packout</div><div class="machine-detail">25 kg BIB, 225 kg drums, 1 ton totes · ~10 day cycle</div></div>
+    </div>
+    <div class="zone-header">Zone 2 — Chocolate making</div>
+    <div class="machine-grid">
+      <div class="machine-card"><div class="machine-name">Fat melter</div><div class="machine-detail"><strong>24 hr</strong> · Simultaneous with liquor melting for chocolate</div></div>
+      <div class="machine-card"><div class="machine-name">Mass line: Refining</div><div class="machine-detail">Min: <strong>500 kg</strong> / Max: <strong>1,500 kg</strong> per batch</div></div>
+      <div class="machine-card"><div class="machine-name">Mass line: Conching</div><div class="machine-detail">Min: <strong>3,000 kg</strong> / Max: <strong>6,000 kg</strong> · Liquor melting 72 hr</div></div>
+      <div class="machine-card"><div class="machine-name">Drops line: Pack out</div><div class="machine-detail">50 lb BIB, 25 kg BIB · Finished chocolate</div></div>
+    </div>
+    <hr class="divider">
+    <div class="section-title">Product pipelines</div>
+    <div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:500;margin-bottom:5px;">Coffee — Roast beans</div><div class="op-pipeline"><span class="op-chip-pre">Seed cleaning</span><span class="op-arrow">→</span><span class="op-chip">Roasting</span></div></div>
+    <div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:500;margin-bottom:5px;">Coffee — Roast &amp; ground</div><div class="op-pipeline"><span class="op-chip-pre">Seed cleaning</span><span class="op-arrow">→</span><span class="op-chip">Roasting</span><span class="op-arrow">→</span><span class="op-chip">Grinding</span></div></div>
+    <div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:500;margin-bottom:5px;">Chocolate liquor (EU or US, CBS or CBE)</div><div class="op-pipeline"><span class="op-chip-pre">Seed cleaning</span><span class="op-arrow">→</span><span class="op-chip">Roasting</span><span class="op-arrow">→</span><span class="op-chip">Fat melting (24 hr)</span><span class="op-arrow">→</span><span class="op-chip">Mcintyre</span><span class="op-arrow">→</span><span class="op-chip">Packout</span></div></div>
+    <div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:500;margin-bottom:5px;">Finished chocolate (CBS or CBE)</div><div class="op-pipeline"><span class="op-chip-pre">Seed cleaning</span><span class="op-arrow">→</span><span class="op-chip">Roasting</span><span class="op-arrow">→</span><div class="parallel-group"><div class="parallel-label">simultaneous</div><span class="op-chip-parallel">Fat melting (24 hr)</span><span class="op-chip-parallel">Liquor melting (72 hr)</span></div><span class="op-arrow">→</span><span class="op-chip">Refining</span><span class="op-arrow">→</span><span class="op-chip">Conching</span><span class="op-arrow">→</span><span class="op-chip">Pack out</span></div></div>
+    <hr class="divider">
+    <div class="section-title">BOM rules</div>
+    <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.9;">
+      <div><strong style="color:var(--color-text-primary);">Liquor BOM:</strong> 70% roasted chocolate (DRGS) + 30% fat</div>
+      <div><strong style="color:var(--color-text-primary);">Fat type:</strong> CBS = non-tempering (East Mac) · CBE = tempering (West Mac)</div>
+      <div><strong style="color:var(--color-text-primary);">EU/US:</strong> Cannot be mixed on same batch</div>
+      <div><strong style="color:var(--color-text-primary);">Roasting yield:</strong> ~68–73%. First batch post-changeover may be scrap/QA hold.</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal" style="display:none;">
+<div class="modal-overlay" onclick="closeOut(event)">
+<div class="modal">
+  <h2 id="mtitle">New work order</h2>
+  <div class="row2">
+    <div class="field"><label>Order ID</label><input id="f-oid" placeholder="e.g. MO-00720"/></div>
+    <div class="field"><label>Due date</label><input id="f-due" type="date"/></div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>Start date</label><input id="f-start" type="date"/></div>
+    <div class="field"><label>End date</label><input id="f-end" type="date"/></div>
+  </div>
+  <div class="field"><label>SKU / Product name</label><input id="f-sku" placeholder="e.g. WIP-5100043-EU · 506.EU CBS Liquor"/></div>
+  <div class="section-title">Product</div>
+  <div class="row2">
+    <div class="field"><label>Category</label>
+      <select id="f-cat" onchange="onCatChange()">
+        <option value="">— select —</option>
+        <option value="coffee">Coffee</option>
+        <option value="liquor">Chocolate liquor</option>
+        <option value="chocolate">Finished chocolate</option>
+      </select>
+    </div>
+    <div class="field"><label>Subtype</label>
+      <select id="f-sub" onchange="onSubChange()"><option value="">— select category first —</option></select>
+    </div>
+  </div>
+  <div class="row2" id="wrap-variants" style="display:none;">
+    <div class="field" id="wrap-region"><label>Market</label>
+      <select id="f-region"><option value="">—</option><option value="eu">EU</option><option value="us">US</option></select>
+    </div>
+    <div class="field"><label>Fat / Mac type</label>
+      <select id="f-temper">
+        <option value="">—</option>
+        <option value="cbe">CBE — Tempering (West Mac)</option>
+        <option value="cbs">CBS — Non-tempering (East Mac)</option>
+      </select>
+    </div>
+  </div>
+  <div class="field"><label>Machine / Line</label>
+    <select id="f-machine">
+      <option value="">— select —</option>
+      <optgroup label="Zone 1">
+        <option value="roaster">Roaster (Alk/Roaster)</option>
+        <option value="seed_clean">Seed cleaning</option>
+        <option value="east_mac">East Mcintyre (CBS)</option>
+        <option value="west_mac">West Mcintyre (CBE)</option>
+        <option value="mac_1250">1250 Mac</option>
+        <option value="mac_packout">5k Mac Packout</option>
+        <option value="grinder">Grinder (coffee)</option>
+      </optgroup>
+      <optgroup label="Zone 2">
+        <option value="fat_melter">Fat melter</option>
+        <option value="refining">Mass line: Refining</option>
+        <option value="conching">Mass line: Conching</option>
+        <option value="depositing">Drops line: Pack out</option>
+      </optgroup>
+    </select>
+  </div>
+  <div class="section-title">Batch</div>
+  <div id="batch-info" class="info-box" style="display:none;"></div>
+  <div class="row3">
+    <div class="field"><label>Batch qty (kg)</label><input id="f-qty" type="number" min="1" oninput="calcBOM()"/></div>
+    <div class="field"><label>No. of batches</label><input id="f-batches" type="number" min="1" value="1" oninput="calcBOM()"/></div>
+    <div class="field"><label>Total (kg)</label><input id="f-total" readonly style="background:var(--color-background-secondary);"/></div>
+  </div>
+  <div id="bom-box" style="display:none;"></div>
+  <div class="section-title">Planning</div>
+  <div class="row2">
+    <div class="field"><label>Status</label>
+      <select id="f-status"><option value="queued">Queued</option><option value="in-progress">In progress</option><option value="on-hold">On hold</option><option value="complete">Complete</option></select>
+    </div>
+    <div class="field"><label>Priority</label>
+      <select id="f-priority"><option value="low">Low</option><option value="med">Medium</option><option value="high">High</option></select>
+    </div>
+  </div>
+  <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Special instructions, MO notes..."></textarea></div>
+  <div class="modal-actions">
+    <button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="saveOrder()">Save order</button>
+  </div>
+</div>
+</div>
+</div>
+
+<script>
+const SUBTYPES={coffee:[{v:'coffee_beans',l:'Roast beans'},{v:'coffee_ground',l:'Roast & ground'}],liquor:[{v:'liquor',l:'Chocolate liquor'}],chocolate:[{v:'chocolate',l:'Finished chocolate'}]};
+const BATCH_C={coffee_beans:{fixed:325},coffee_ground:{fixed:1000},liquor:{min:2250,max:4300},chocolate:{min:3000,max:6000}};
+const PROD_LABELS={coffee_beans:'Coffee — Roast beans',coffee_ground:'Coffee — Roast & ground',liquor:'Chocolate liquor',chocolate:'Finished chocolate'};
+const ZONES=[
+  {label:'Zone 1 — Seed prep & roasting',machines:[{key:'seed_clean',label:'Seed cleaning'},{key:'roaster',label:'Roaster'}]},
+  {label:'Zone 1 — Mcintyres',machines:[{key:'east_mac',label:'East Mac (CBS)'},{key:'west_mac',label:'West Mac (CBE)'},{key:'mac_1250',label:'1250 Mac'},{key:'mac_packout',label:'Mac Packout'}]},
+  {label:'Zone 2 — Chocolate',machines:[{key:'fat_melter',label:'Fat melter'},{key:'refining',label:'Refining'},{key:'conching',label:'Conching'},{key:'depositing',label:'Pack out'}]}
+];
+const SEED=[
+  {id:'a1',orderId:'MO-00722',sku:'WIP-5100042-EU · 505.EU (CBE) Liquor EU',cat:'liquor',sub:'liquor',region:'eu',temper:'cbe',machine:'west_mac',qty:4300,batches:1,total:4300,status:'in-progress',priority:'high',due:'2026-03-29',start:'2026-03-23',end:'2026-03-29',notes:'2 of 4 — West Mac (CBE) · Release 03-11'},
+  {id:'a2',orderId:'MO-00731',sku:'WIP-5100043-EU · 506.EU (CBS) Liquor EU',cat:'liquor',sub:'liquor',region:'eu',temper:'cbs',machine:'east_mac',qty:4300,batches:1,total:4300,status:'in-progress',priority:'high',due:'2026-03-25',start:'2026-03-23',end:'2026-03-25',notes:'East Mac (CBS) · Packout run'},
+  {id:'a3',orderId:'MO-00721',sku:'WIP-5100043-EU · 506.EU (CBS) Liquor EU',cat:'liquor',sub:'liquor',region:'eu',temper:'cbs',machine:'east_mac',qty:4300,batches:1,total:4300,status:'in-progress',priority:'high',due:'2026-03-29',start:'2026-03-25',end:'2026-03-29',notes:'East Mac (CBS) · 2 of 2 · Release 03-17'},
+  {id:'a4',orderId:'MO-00751',sku:'WIP-5100012-US · 506.US (CBS) Liquor w PK',cat:'liquor',sub:'liquor',region:'us',temper:'cbs',machine:'mac_1250',qty:750,batches:1,total:750,status:'in-progress',priority:'med',due:'2026-03-25',start:'2026-03-23',end:'2026-03-25',notes:"1250 Mac · CBS liquor w/ '25 grape seeds · 750 kg"},
+  {id:'a5',orderId:'MO-00686',sku:'WIP1-5100810-US · 810 CBE_US Filling, Mild Tempering',cat:'chocolate',sub:'chocolate',region:'us',temper:'cbe',machine:'refining',qty:1500,batches:3,total:4500,status:'in-progress',priority:'high',due:'2026-03-23',start:'2026-03-23',end:'2026-03-23',notes:'Refining · 3 x 1500 kg · Run Flake'},
+  {id:'a6',orderId:'MO-00711',sku:'WIP-5100810-US · 810 CBE_US Conching, Mild Tempering',cat:'chocolate',sub:'chocolate',region:'us',temper:'cbe',machine:'conching',qty:4500,batches:1,total:4500,status:'in-progress',priority:'high',due:'2026-03-23',start:'2026-03-23',end:'2026-03-23',notes:'Conching · Liquify, Flavor, Pump out'},
+  {id:'a7',orderId:'MO-00712',sku:'FG-888-810-00-US · 810 CBE_US Coating, Mild Tempering',cat:'chocolate',sub:'chocolate',region:'us',temper:'cbe',machine:'depositing',qty:4500,batches:1,total:4500,status:'in-progress',priority:'high',due:'2026-03-24',start:'2026-03-24',end:'2026-03-24',notes:'Depositing · EZ-Melts · Rescheduled from 23 Mar'},
+  {id:'a8',orderId:'TBD-ROASTER',sku:'WIP-5100007 · Dutched Roasted Grape Seeds',cat:'liquor',sub:'liquor',region:'eu',temper:'cbs',machine:'roaster',qty:325,batches:18,total:5031,status:'in-progress',priority:'med',due:'2026-03-26',start:'2026-03-23',end:'2026-03-26',notes:"Roaster · DRGS · 18 batches · Changeover Fri"}
+];
+
+let orders=[],collapsed={},editingId=null,calOffset=0,storageOK=false;
+
+async function init(){
+  try{
+    await window.storage.set('_ping','1');
+    const r=await window.storage.get('_ping');
+    storageOK=!!(r&&r.value);
+  }catch(e){storageOK=false;}
+  const n=document.getElementById('notice');
+  if(!storageOK){n.style.display='block';n.textContent='⚠ Persistent storage not active — publish this artifact to enable it.';}
+  try{
+    const r=await window.storage.get('vf_orders');
+    orders=r&&r.value?JSON.parse(r.value):JSON.parse(JSON.stringify(SEED));
+    if(!r||!r.value) await persist();
+  }catch(e){orders=JSON.parse(JSON.stringify(SEED));}
+  try{const r=await window.storage.get('vf_collapsed');if(r&&r.value)collapsed=JSON.parse(r.value);}catch(e){}
+  renderCal();
+}
+
+async function persist(){
+  if(!storageOK)return;
+  const ind=document.getElementById('save-ind');
+  ind.textContent='Saving…';ind.style.opacity='1';
+  try{
+    await window.storage.set('vf_orders',JSON.stringify(orders));
+    await window.storage.set('vf_collapsed',JSON.stringify(collapsed));
+    ind.textContent='Saved ✓';setTimeout(()=>{ind.style.opacity='0';},2000);
+  }catch(e){ind.textContent='Save failed';setTimeout(()=>{ind.style.opacity='0';},3000);}
+}
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function getMon(d){const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);const m=new Date(d);m.setDate(diff);m.setHours(0,0,0,0);return m;}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function fmtDate(d){return d.toISOString().slice(0,10);}
+function chipClass(o){
+  if(o.machine==='roaster')return 'mo-roast';
+  if(o.cat==='chocolate')return 'mo-choc';
+  if(o.cat==='liquor'&&o.temper==='cbe')return 'mo-cbe';
+  if(o.cat==='liquor'&&o.temper==='cbs')return 'mo-cbs';
+  return 'mo-grind';
+}
+function shortSku(s){
+  if(!s)return '';
+  const m=s.match(/[·:]\s*(.+)$/);
+  return m?m[1].trim().slice(0,30):s.slice(0,30);
+}
+
+function switchTab(t){
+  ['calendar','orders','capacity'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['calendar','orders','capacity'][i]===t));
+  if(t==='calendar')renderCal();
+  if(t==='orders')render();
+}
+function shiftCal(d){calOffset+=d*4;renderCal();}
+function resetCal(){calOffset=0;renderCal();}
+
+function renderCal(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const start=addDays(getMon(today),calOffset*7);
+  const days=[];for(let i=0;i<28;i++)days.push(addDays(start,i));
+  document.getElementById('cal-period').textContent=
+    days[0].toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+
+    days[27].toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  const DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  let html='<thead><tr><th style="min-width:115px;text-align:left;">Machine</th>';
+  days.forEach((d,i)=>{
+    const isToday=fmtDate(d)===fmtDate(today),isMon=d.getDay()===1&&i>0;
+    const di=d.getDay()===0?6:d.getDay()-1;
+    const showMo=d.getDate()===1||i===0;
+    html+=`<th class="day-hdr${isToday?' today-hdr':''}${isMon?' week-sep':''}">
+      <span class="dow">${DOW[di]}</span>
+      <span class="date">${d.getDate()}${showMo?' '+d.toLocaleDateString('en-GB',{month:'short'}):''}</span>
+    </th>`;
+  });
+  html+='</tr></thead><tbody>';
+  ZONES.forEach(zone=>{
+    html+=`<tr class="zone-row"><th colspan="${days.length+1}">${zone.label}</th></tr>`;
+    zone.machines.forEach(m=>{
+      const mo=orders.filter(o=>o.machine===m.key);
+      html+=`<tr><td class="machine-label">${m.label}</td>`;
+      days.forEach((d,i)=>{
+        const ds=fmtDate(d),isToday=ds===fmtDate(today),isMon=d.getDay()===1&&i>0;
+        const active=mo.filter(o=>{const s=o.start||o.due,e=o.end||o.due;return s&&e&&ds>=s&&ds<=e;});
+        html+=`<td class="cal-cell${isToday?' today-col':''}${isMon?' week-sep':''}" onclick="calClick('${m.key}','${ds}')">`;
+        if(active.length){
+          active.forEach(o=>{
+            html+=`<div class="mo-block ${chipClass(o)}" title="${(o.sku||'')+'\n'+(o.notes||'')}" onclick="event.stopPropagation();editById('${o.id}')">
+              <div class="mo-id">${o.orderId||'—'}</div>
+              ${o.sku?`<div class="mo-sku">${shortSku(o.sku)}</div>`:''}
+              ${o.total?`<div class="mo-qty">${o.total.toLocaleString()} kg</div>`:''}
+            </div>`;
+          });
+        }else html+=`<span class="mo-empty">·</span>`;
+        html+='</td>';
+      });
+      html+='</tr>';
+    });
+  });
+  document.getElementById('cal-table').innerHTML=html+'</tbody>';
+}
+
+function editById(id){openModal(orders.find(o=>o.id===id));}
+function calClick(mk,ds){openModal(null,mk,ds);}
+
+function onCatChange(){
+  const cat=document.getElementById('f-cat').value,sub=document.getElementById('f-sub');
+  sub.innerHTML='<option value="">— select —</option>';
+  if(cat&&SUBTYPES[cat])SUBTYPES[cat].forEach(s=>{sub.innerHTML+=`<option value="${s.v}">${s.l}</option>`;});
+  document.getElementById('wrap-variants').style.display='none';
+  document.getElementById('batch-info').style.display='none';
+  document.getElementById('bom-box').style.display='none';
+  document.getElementById('f-qty').value='';document.getElementById('f-total').value='';
+}
+function onSubChange(){
+  const sub=document.getElementById('f-sub').value,cat=document.getElementById('f-cat').value;
+  if(!sub)return;
+  document.getElementById('wrap-variants').style.display=(cat==='liquor'||cat==='chocolate')?'grid':'none';
+  document.getElementById('wrap-region').style.display=cat==='liquor'?'':'none';
+  const c=BATCH_C[sub];
+  if(c){const bi=document.getElementById('batch-info');bi.style.display='';bi.className='info-box';bi.innerHTML=c.fixed?`Fixed batch size: <strong>${c.fixed.toLocaleString()} kg</strong>`:`Batch size: <strong>${c.min.toLocaleString()} – ${c.max.toLocaleString()} kg</strong>`;}
+  calcBOM();
+}
+function calcBOM(){
+  const sub=document.getElementById('f-sub').value,qty=parseFloat(document.getElementById('f-qty').value)||0,batches=parseInt(document.getElementById('f-batches').value)||1,total=qty*batches;
+  document.getElementById('f-total').value=total>0?total.toLocaleString():'';
+  const cat=document.getElementById('f-cat').value,bb=document.getElementById('bom-box');
+  if(cat==='liquor'&&total>0){
+    const ro=Math.round(total*0.7),fat=Math.round(total*0.3),rb=Math.ceil(ro/325);
+    bb.style.display='';bb.className='info-box';
+    bb.innerHTML=`BOM — DRGS: <strong>${ro.toLocaleString()} kg</strong> (~${rb} roaster batches) · Fat: <strong>${fat.toLocaleString()} kg</strong>`;
+  }else bb.style.display='none';
+  const c=BATCH_C[sub];
+  if(c&&qty>0){
+    const bi=document.getElementById('batch-info');let w='';
+    if(c.fixed&&qty!==c.fixed)w=` ⚠ Should be ${c.fixed.toLocaleString()} kg`;
+    else if(c.min&&(qty<c.min||qty>c.max))w=` ⚠ Must be ${c.min.toLocaleString()}–${c.max.toLocaleString()} kg`;
+    bi.className=w?'warn':'info-box';
+    bi.innerHTML=(c.fixed?`Fixed batch size: <strong>${c.fixed.toLocaleString()} kg</strong>`:`Batch size: <strong>${c.min.toLocaleString()} – ${c.max.toLocaleString()} kg</strong>`)+w;
+  }
+}
+
+function openModal(prefill,mk,ds){
+  editingId=null;
+  document.getElementById('mtitle').textContent='New work order';
+  ['f-oid','f-due','f-start','f-end','f-qty','f-notes','f-sku'].forEach(id=>{document.getElementById(id).value='';});
+  document.getElementById('f-cat').value='';
+  document.getElementById('f-sub').innerHTML='<option value="">— select category first —</option>';
+  document.getElementById('f-region').value='';document.getElementById('f-temper').value='';
+  document.getElementById('f-machine').value=mk||'';
+  document.getElementById('f-batches').value='1';document.getElementById('f-total').value='';
+  document.getElementById('f-status').value='queued';document.getElementById('f-priority').value='low';
+  document.getElementById('wrap-variants').style.display='none';
+  document.getElementById('batch-info').style.display='none';
+  document.getElementById('bom-box').style.display='none';
+  if(ds){document.getElementById('f-start').value=ds;document.getElementById('f-due').value=ds;document.getElementById('f-end').value=ds;}
+  if(prefill){
+    editingId=prefill.id;
+    document.getElementById('mtitle').textContent='Edit — '+prefill.orderId;
+    document.getElementById('f-oid').value=prefill.orderId||'';
+    document.getElementById('f-sku').value=prefill.sku||'';
+    document.getElementById('f-due').value=prefill.due||'';
+    document.getElementById('f-start').value=prefill.start||'';
+    document.getElementById('f-end').value=prefill.end||'';
+    document.getElementById('f-cat').value=prefill.cat||'';onCatChange();
+    document.getElementById('f-sub').value=prefill.sub||'';onSubChange();
+    document.getElementById('f-region').value=prefill.region||'';
+    document.getElementById('f-temper').value=prefill.temper||'';
+    document.getElementById('f-machine').value=prefill.machine||'';
+    document.getElementById('f-qty').value=prefill.qty||'';
+    document.getElementById('f-batches').value=prefill.batches||'1';
+    document.getElementById('f-status').value=prefill.status||'queued';
+    document.getElementById('f-priority').value=prefill.priority||'low';
+    document.getElementById('f-notes').value=prefill.notes||'';
+    calcBOM();
+  }
+  document.getElementById('modal').style.display='flex';
+}
+function closeModal(){document.getElementById('modal').style.display='none';}
+function closeOut(e){if(e.target===e.currentTarget)closeModal();}
+
+function saveOrder(){
+  const cat=document.getElementById('f-cat').value,sub=document.getElementById('f-sub').value;
+  if(!cat||!sub){alert('Please select a product category and subtype.');return;}
+  const qty=parseFloat(document.getElementById('f-qty').value)||0,batches=parseInt(document.getElementById('f-batches').value)||1;
+  if(qty<=0){alert('Please enter a batch quantity.');return;}
+  const c=BATCH_C[sub];
+  if(c){
+    if(c.fixed&&qty!==c.fixed){if(!confirm(`Batch size should be ${c.fixed} kg. Save anyway?`))return;}
+    else if(c.min&&(qty<c.min||qty>c.max)){if(!confirm(`Batch size outside range. Save anyway?`))return;}
+  }
+  const o={
+    id:editingId||uid(),
+    orderId:document.getElementById('f-oid').value.trim(),
+    sku:document.getElementById('f-sku').value.trim(),
+    due:document.getElementById('f-due').value,
+    start:document.getElementById('f-start').value,
+    end:document.getElementById('f-end').value,
+    cat,sub,
+    region:document.getElementById('f-region').value,
+    temper:document.getElementById('f-temper').value,
+    machine:document.getElementById('f-machine').value,
+    qty,batches,total:qty*batches,
+    status:document.getElementById('f-status').value,
+    priority:document.getElementById('f-priority').value,
+    notes:document.getElementById('f-notes').value.trim()
+  };
+  if(editingId){const i=orders.findIndex(x=>x.id===editingId);if(i!==-1)orders[i]=o;}
+  else orders.push(o);
+  persist();closeModal();render();renderCal();
+}
+function deleteOrder(id){
+  if(!confirm('Delete this order?'))return;
+  orders=orders.filter(o=>o.id!==id);persist();render();renderCal();
+}
+
+function render(){
+  renderMetrics();
+  const board=document.getElementById('board');
+  if(!orders.length){board.innerHTML='<div class="empty">No work orders yet.</div>';return;}
+  const groups={};
+  orders.forEach(o=>{const k=PROD_LABELS[o.sub]||'Other';if(!groups[k])groups[k]=[];groups[k].push(o);});
+  board.innerHTML=Object.entries(groups).map(([grp,items])=>{
+    const isOpen=!collapsed[grp];
+    const overdue=items.filter(o=>o.due&&o.status!=='complete'&&new Date(o.due)<new Date()).length;
+    return`<div class="card">
+      <div class="card-header" onclick="toggleGroup('${grp.replace(/'/g,"\\'")}')">
+        <span class="chevron ${isOpen?'open':''}">▶</span>
+        <span class="card-title">${grp}</span>
+        ${overdue?`<span class="badge badge-high">${overdue} overdue</span>`:''}
+        <span class="card-meta">${items.length} order${items.length!==1?'s':''}</span>
+      </div>
+      ${isOpen?`<table class="orders">
+        <thead><tr><th>ID</th><th>SKU</th><th>Machine</th><th>Start</th><th>End</th><th>Total</th><th>Priority</th><th>Status</th><th></th></tr></thead>
+        <tbody>${items.map(o=>{
+          const od=o.due&&o.status!=='complete'&&new Date(o.due)<new Date();
+          return`<tr>
+            <td style="font-size:12px;white-space:nowrap;">${o.orderId||'—'}</td>
+            <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${o.sku||''}">${shortSku(o.sku)||'—'}</td>
+            <td style="font-size:12px;">${o.machine||'—'}</td>
+            <td style="font-size:12px;">${o.start||'—'}</td>
+            <td style="font-size:12px;${od?'color:#A32D2D;font-weight:500;':''}">${o.end||o.due||'—'}</td>
+            <td style="white-space:nowrap;">${o.total?o.total.toLocaleString()+' kg':'—'}</td>
+            <td><span class="badge badge-${o.priority||'low'}">${{high:'High',med:'Med',low:'Low'}[o.priority]||'—'}</span></td>
+            <td><span class="badge badge-${o.status}">${{queued:'Queued','in-progress':'In progress','on-hold':'On hold',complete:'Complete'}[o.status]||o.status}</span></td>
+            <td style="white-space:nowrap;">
+              <button class="btn btn-sm" onclick="editById('${o.id}')">Edit</button>
+              <button class="btn btn-sm btn-danger" style="margin-left:4px;" onclick="deleteOrder('${o.id}')">Del</button>
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`:''}
+    </div>`;
+  }).join('');
+}
+function renderMetrics(){
+  const total=orders.length,inprog=orders.filter(o=>o.status==='in-progress').length,
+    complete=orders.filter(o=>o.status==='complete').length,
+    overdue=orders.filter(o=>o.due&&o.status!=='complete'&&new Date(o.due)<new Date()).length;
+  document.getElementById('metrics').innerHTML=`
+    <div class="metric"><div class="metric-label">Total orders</div><div class="metric-value">${total}</div></div>
+    <div class="metric"><div class="metric-label">In progress</div><div class="metric-value">${inprog}</div></div>
+    <div class="metric"><div class="metric-label">Complete</div><div class="metric-value">${complete}</div></div>
+    <div class="metric"><div class="metric-label">Overdue</div><div class="metric-value" style="${overdue?'color:#A32D2D':''}">${overdue}</div></div>`;
+}
+function toggleGroup(grp){collapsed[grp]=!collapsed[grp];persist();render();}
+init();
+</script>
+</body>
+</html>
