@@ -1,0 +1,29 @@
+ISA-95 Equipment Hierarchy — Physical Model,,,,,,,,,,,,
+Enterprise → Site → Area → Process Cell → Unit → Equipment Module → Control Module,,,,,,,,,,,,
+,,,,,,,,,,,,
+Equipment ID,Name,ISA-95 Level,Parent ID,Equipment Class,Capability,Max Capacity,Cap UOM,Flow Type,PLC / Controller,SCADA Tag Prefix,Status,Notes
+VF-ENT,Voyage Foods Inc.,Enterprise,—,Enterprise,,,,,,,Active,
+MAS-SITE,MASland Manufacturing,Site,VF-ENT,Site,,,,,,,Active,"MASland, CA"
+MAS-SITE,Mason Manufacturing,Site,VF-ENT,Site,,,,,,,Active,"4219 US-42, Mason, OH"
+MAS-AR-01,CFC Production Area,Area,MAS-SITE,Production Area,CFC CBS & CBE mfg,,,,,,Active,
+MAS-PC-01,CFC Process Cell,Process Cell,MAS-AR-01,Process Cell,Full CFC line,,,,,,Active,Grapeseed → Packoff
+WC-ALK-01,Alkalizer,Unit,MAS-PC-01,Reactor,NaOH treatment,500,kg,Batch,AB ControlLogix,MAS.ALK01,Active,60 hr cycle
+WC-RST-01,Roaster,Unit,MAS-PC-01,Roaster,Dutching / roast,500,kg,Batch,AB ControlLogix,MAS.RST01,Active,60 hr cycle
+WC-HOP-01,Grapeseed Hopper,Unit,MAS-PC-01,Hopper/Buffer,Buffer roasted seed,5000,kg,Buffer,AB ControlLogix,MAS.HOP01,Active,Feeds both Macentires
+WC-MCB-01,Macentire CBS,Unit,MAS-PC-01,Mill,CBS liquor production,5000,kg,Batch,Siemens S7-1500,MAS.MCB01,Active,6000 hr cycle; via ProSoft
+WC-MCE-01,Macentire CBE,Unit,MAS-PC-01,Mill,CBE liquor production,5000,kg,Batch,Siemens S7-1500,MAS.MCE01,Active,6000 hr cycle; via ProSoft
+WC-FTK-01,Fat Tank,Unit,MAS-PC-01,Storage Tank,CBS/CBE fat storage,10000,kg,Buffer,AB ControlLogix,MAS.FTK01,Active,External receipt
+WC-HCS-01,Holding Tank CBS,Unit,MAS-PC-01,Holding Tank,CBS liquor hold,10000,kg,Buffer,AB ControlLogix,MAS.HCS01,Active,
+WC-HCB-01,Holding Tank CBE,Unit,MAS-PC-01,Holding Tank,CBE liquor hold,10000,kg,Buffer,AB ControlLogix,MAS.HCB01,Active,
+WC-MIX-01,Mixer,Unit,MAS-PC-01,Mixer,CFC premix blending,1500,kg,Batch,AB ControlLogix,MAS.MIX01,Active,15 min cycle
+WC-2RR-01,2 Roll Refiner,Unit,MAS-PC-01,Refiner,Coarse refine,1000,kg/hr,Continuous,Siemens S7-1500,MAS.2RR01,Active,Continuous throughput
+WC-5RR-01,5 Roll Refiner,Unit,MAS-PC-01,Refiner,Fine refine D90<25µm,1000,kg/hr,Continuous,Siemens S7-1500,MAS.5RR01,Active,Bühler Finer S 1800 V
+WC-CCH-01,CBS Conche,Unit,MAS-PC-01,Conche,CBS conching,6000,kg,Batch,Siemens S7-1500,MAS.CCH01,Active,600 hr cycle; DÜC
+WC-ECH-01,CBE Conche,Unit,MAS-PC-01,Conche,CBE conching,6000,kg,Batch,Siemens S7-1500,MAS.ECH01,Active,600 hr cycle; DÜC
+WC-SHT-01,CBS Holding Tank,Unit,MAS-PC-01,Holding Tank,Post-conche CBS hold,10000,kg,Buffer,AB ControlLogix,MAS.SHT01,Active,
+WC-EHT-01,CBE Holding Tank,Unit,MAS-PC-01,Holding Tank,Post-conche CBE hold,10000,kg,Buffer,AB ControlLogix,MAS.EHT01,Active,
+WC-SDT-01,CBS Day Tank,Unit,MAS-PC-01,Day Tank,CBS feed to temper,3800,kg,Buffer,AB ControlLogix,MAS.SDT01,Active,Feeds tempering
+WC-EDT-01,CBE Day Tank,Unit,MAS-PC-01,Day Tank,CBE feed to temper,3800,kg,Buffer,AB ControlLogix,MAS.EDT01,Active,Feeds tempering
+WC-TMP-01,Tempering Machine,Unit,MAS-PC-01,Temperer,CFC conditioning,1000,kg/hr,Continuous,AB ControlLogix,MAS.TMP01,Active,CBS — no β-V needed
+WC-DRP-01,Drops Line,Unit,MAS-PC-01,Depositor,Deposit + cool drops,1000,kg/hr,Continuous,Siemens S7-1500,MAS.DRP01,Active,Bühler DropsMaster
+WC-PKG-01,Packoff Line,Unit,MAS-PC-01,Packager,"Weigh, fill, seal, pallet",1000,kg/hr,Continuous,AB ControlLogix,MAS.PKG01,Active,50 lb cases; GS1
