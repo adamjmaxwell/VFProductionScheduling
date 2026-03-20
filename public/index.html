@@ -454,9 +454,9 @@ function renderUsers(){
   const body=document.getElementById('admin-user-body');
   if(!body)return;
   body.innerHTML=users.map(u=>`<tr>
-    <td style="font-weight:500;">${u.username}${u.id==='master'?' <span style="font-size:10px;color:var(--color-text-tertiary);">(master)</span>':''}</td>
-    <td><span class="role-${u.role}">${u.role.charAt(0).toUpperCase()+u.role.slice(1)}</span></td>
-    <td style="font-size:12px;color:var(--color-text-secondary);">${u.created||'—'}</td>
+    <td style="font-weight:500;">${esc(u.username)}${u.id==='master'?' <span style="font-size:10px;color:var(--color-text-tertiary);">(master)</span>':''}</td>
+    <td><span class="role-${esc(u.role)}">${esc(u.role.charAt(0).toUpperCase()+u.role.slice(1))}</span></td>
+    <td style="font-size:12px;color:var(--color-text-secondary);">${esc(u.created)||'—'}</td>
     <td>
       <button class="btn btn-sm" onclick="openUserModal('${u.id}')">Edit</button>
       ${u.id!=='master'?`<button class="btn btn-sm btn-danger" style="margin-left:4px;" onclick="deleteUser('${u.id}')">Delete</button>`:''}
@@ -596,10 +596,11 @@ async function persist(){
   }catch(e){ind.textContent='Save failed';setTimeout(()=>{ind.style.opacity='0';},3000);}
 }
 
+function esc(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function getMon(d){const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);const m=new Date(d);m.setDate(diff);m.setHours(0,0,0,0);return m;}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
-function fmtDate(d){return d.toISOString().slice(0,10);}
+function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function chipClass(o){
   if(o.machine==='roaster')return 'mo-roast';
   if(o.cat==='chocolate')return 'mo-choc';
@@ -658,9 +659,9 @@ function renderCal(){
         html+=`<td class="cal-cell${isToday?' today-col':''}${isMon?' week-sep':''}" onclick="calClick('${m.key}','${ds}')">`;
         if(active.length){
           active.forEach(o=>{
-            html+=`<div class="mo-block ${chipClass(o)}" title="${(o.sku||'')+'\n'+(o.notes||'')}" onclick="event.stopPropagation();editById('${o.id}')">
-              <div class="mo-id">${o.orderId||'—'}</div>
-              ${o.sku?`<div class="mo-sku">${shortSku(o.sku)}</div>`:''}
+            html+=`<div class="mo-block ${chipClass(o)}" title="${esc((o.sku||'')+'\n'+(o.notes||''))}" onclick="event.stopPropagation();editById('${esc(o.id)}')">
+              <div class="mo-id">${esc(o.orderId)||'—'}</div>
+              ${o.sku?`<div class="mo-sku">${esc(shortSku(o.sku))}</div>`:''}
               ${o.total?`<div class="mo-qty">${o.total.toLocaleString()} kg</div>`:''}
             </div>`;
           });
@@ -673,7 +674,7 @@ function renderCal(){
   document.getElementById('cal-table').innerHTML=html+'</tbody>';
 }
 
-function editById(id){openModal(orders.find(o=>o.id===id));}
+function editById(id){const o=orders.find(x=>x.id===id);if(!o)return;openModal(o);}
 function calClick(mk,ds){openModal(null,mk,ds);}
 
 function onCatChange(){
@@ -797,7 +798,8 @@ function render(){
   orders.forEach(o=>{const k=PROD_LABELS[o.sub]||'Other';if(!groups[k])groups[k]=[];groups[k].push(o);});
   board.innerHTML=Object.entries(groups).map(([grp,items])=>{
     const isOpen=!collapsed[grp];
-    const overdue=items.filter(o=>o.due&&o.status!=='complete'&&new Date(o.due)<new Date()).length;
+    const todayStr=fmtDate(new Date());
+    const overdue=items.filter(o=>o.due&&o.status!=='complete'&&o.due<todayStr).length;
     return`<div class="card">
       <div class="card-header" onclick="toggleGroup('${grp.replace(/'/g,"\\'")}')">
         <span class="chevron ${isOpen?'open':''}">▶</span>
@@ -808,13 +810,13 @@ function render(){
       ${isOpen?`<table class="orders">
         <thead><tr><th>ID</th><th>SKU</th><th>Machine</th><th>Start</th><th>End</th><th>Total</th><th>Priority</th><th>Status</th><th></th></tr></thead>
         <tbody>${items.map(o=>{
-          const od=o.due&&o.status!=='complete'&&new Date(o.due)<new Date();
+          const od=o.due&&o.status!=='complete'&&o.due<todayStr;
           return`<tr>
-            <td style="font-size:12px;white-space:nowrap;">${o.orderId||'—'}</td>
-            <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${o.sku||''}">${shortSku(o.sku)||'—'}</td>
-            <td style="font-size:12px;">${o.machine||'—'}</td>
-            <td style="font-size:12px;">${o.start||'—'}</td>
-            <td style="font-size:12px;${od?'color:#A32D2D;font-weight:500;':''}">${o.end||o.due||'—'}</td>
+            <td style="font-size:12px;white-space:nowrap;">${esc(o.orderId)||'—'}</td>
+            <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(o.sku||'')}">${esc(shortSku(o.sku))||'—'}</td>
+            <td style="font-size:12px;">${esc(o.machine)||'—'}</td>
+            <td style="font-size:12px;">${esc(o.start)||'—'}</td>
+            <td style="font-size:12px;${od?'color:#A32D2D;font-weight:500;':''}">${esc(o.end||o.due)||'—'}</td>
             <td style="white-space:nowrap;">${o.total?o.total.toLocaleString()+' kg':'—'}</td>
             <td><span class="badge badge-${o.priority||'low'}">${{high:'High',med:'Med',low:'Low'}[o.priority]||'—'}</span></td>
             <td><span class="badge badge-${o.status}">${{queued:'Queued','in-progress':'In progress','on-hold':'On hold',complete:'Complete'}[o.status]||o.status}</span></td>
@@ -831,7 +833,7 @@ function render(){
 function renderMetrics(){
   const total=orders.length,inprog=orders.filter(o=>o.status==='in-progress').length,
     complete=orders.filter(o=>o.status==='complete').length,
-    overdue=orders.filter(o=>o.due&&o.status!=='complete'&&new Date(o.due)<new Date()).length;
+    overdue=orders.filter(o=>{const t=fmtDate(new Date());return o.due&&o.status!=='complete'&&o.due<t;}).length;
   document.getElementById('metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Total orders</div><div class="metric-value">${total}</div></div>
     <div class="metric"><div class="metric-label">In progress</div><div class="metric-value">${inprog}</div></div>
