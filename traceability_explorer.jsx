@@ -21,35 +21,96 @@ function parseCSVLine(line) {
   return fields;
 }
 
+function parseNum(s) {
+  if (!s) return 0;
+  return parseFloat(s.replace(/,/g, '')) || 0;
+}
+
+function dateToMonth(dateStr) {
+  if (!dateStr) return null;
+  // Handle DD-MMM-YYYY (e.g. "06-May-2025")
+  const mMap = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  const m1 = dateStr.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if (m1) { const mo = mMap[m1[2].toLowerCase()]; return mo ? m1[3]+'-'+mo : null; }
+  // Handle YYYY-MM already
+  const m2 = dateStr.match(/^(\d{4})-(\d{2})$/);
+  if (m2) return dateStr;
+  // Handle YYYY-MM-DD
+  const m3 = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m3) return m3[1]+'-'+m3[2];
+  return null;
+}
+
+function findHeaderRow(lines) {
+  for (let i = 0; i < Math.min(lines.length, 20); i++) {
+    const fields = parseCSVLine(lines[i]).map(f => f.toLowerCase());
+    if (fields.includes('sku') && (fields.includes('quantity in') || fields.includes('inbound'))) return i;
+  }
+  return -1;
+}
+
 function parseInventoryCSV(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row");
-  const hdr = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, '_'));
-  const req = ['sku','product','category','unit','month','ref_type','inbound','outbound'];
-  const missing = req.filter(r => !hdr.includes(r));
-  if (missing.length) throw new Error("Missing required columns: " + missing.join(', '));
-  const idx = Object.fromEntries(hdr.map((h, i) => [h, i]));
+
+  const hdrIdx = findHeaderRow(lines);
+  if (hdrIdx === -1) throw new Error("Could not find header row with SKU and Quantity columns");
+
+  const hdr = parseCSVLine(lines[hdrIdx]).map(h => h.toLowerCase().trim());
+  // Map column names — support both the report format and simplified format
+  const colMap = {};
+  hdr.forEach((h, i) => {
+    if (h === 'sku') colMap.sku = i;
+    else if (h === 'product') colMap.product = i;
+    else if (h === 'category') colMap.category = i;
+    else if (h === 'unit') colMap.unit = i;
+    else if (h === 'date') colMap.date = i;
+    else if (h === 'month') colMap.month = i;
+    else if (h === 'reference type' || h === 'ref_type') colMap.refType = i;
+    else if (h === 'quantity in' || h === 'inbound') colMap.qtyIn = i;
+    else if (h === 'quantity out' || h === 'outbound') colMap.qtyOut = i;
+    else if (h === 'batch #' || h === 'batch_count') colMap.batch = i;
+    else if (h === 'reference') colMap.reference = i;
+  });
+
+  if (colMap.sku === undefined) throw new Error("Missing required column: SKU");
+  if (colMap.qtyIn === undefined) throw new Error("Missing required column: Quantity in / inbound");
+  if (colMap.date === undefined && colMap.month === undefined) throw new Error("Missing required column: Date or month");
 
   const skuMap = new Map();
+  const batchSets = new Map();
   const catAgg = {};
   const rtAgg = {};
   const monthSet = new Set();
+  let rowCount = 0;
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = hdrIdx + 1; i < lines.length; i++) {
     const f = parseCSVLine(lines[i]);
-    if (f.length < req.length) continue;
-    const sku = f[idx.sku], prod = f[idx.product], cat = f[idx.category];
-    const unit = f[idx.unit], month = f[idx.month], rt = f[idx.ref_type];
-    const inb = parseFloat(f[idx.inbound]) || 0, outb = parseFloat(f[idx.outbound]) || 0;
-    const bc = parseInt(f[idx.batch_count !== undefined ? idx.batch_count : -1]) || 0;
-    if (!sku || !month) continue;
+    if (f.length < 3) continue;
+    const sku = f[colMap.sku];
+    if (!sku) continue;
+
+    const month = colMap.month !== undefined ? f[colMap.month] : dateToMonth(f[colMap.date]);
+    if (!month) continue;
+
+    const prod = colMap.product !== undefined ? f[colMap.product] : '';
+    const cat = colMap.category !== undefined ? f[colMap.category] : '';
+    const unit = colMap.unit !== undefined ? f[colMap.unit] : '';
+    const rt = colMap.refType !== undefined ? (f[colMap.refType] || '') : '';
+    const inb = parseNum(f[colMap.qtyIn]);
+    const outb = colMap.qtyOut !== undefined ? parseNum(f[colMap.qtyOut]) : 0;
+    const batch = colMap.batch !== undefined ? f[colMap.batch] : '';
+
     monthSet.add(month);
+    rowCount++;
 
     if (!skuMap.has(sku)) skuMap.set(sku, { s: sku, p: prod, c: cat, u: unit, m: {}, rt: {}, ti: 0, to: 0, net: 0, bc: 0 });
+    if (!batchSets.has(sku)) batchSets.set(sku, new Set());
     const entry = skuMap.get(sku);
     if (!entry.m[month]) entry.m[month] = { i: 0, o: 0 };
     entry.m[month].i += inb; entry.m[month].o += outb;
-    entry.ti += inb; entry.to += outb; entry.net += (inb - outb); entry.bc += bc;
+    entry.ti += inb; entry.to += outb; entry.net += (inb - outb);
+    if (batch) batchSets.get(sku).add(batch);
     if (rt) {
       if (!entry.rt[rt]) entry.rt[rt] = { i: 0, o: 0 };
       entry.rt[rt].i += inb; entry.rt[rt].o += outb;
@@ -64,10 +125,102 @@ function parseInventoryCSV(text) {
     rtAgg[rt][month].i += inb; rtAgg[rt][month].o += outb;
   }
 
+  // Set batch counts from unique batch numbers per SKU
+  for (const [sku, entry] of skuMap) entry.bc = batchSets.get(sku).size;
+
   const months = [...monthSet].sort();
   const invSku = [...skuMap.values()];
-  if (!invSku.length) throw new Error("No valid data rows found in CSV");
-  return { invSku, invCat: catAgg, invRt: rtAgg, months };
+  if (!invSku.length) throw new Error("No valid data rows found (parsed " + lines.length + " lines, " + rowCount + " data rows)");
+  return { invSku, invCat: catAgg, invRt: rtAgg, months, rowCount };
+}
+
+/* ───────── Merge inventory data (for delta uploads) ───────── */
+function mergeInventoryData(existing, delta) {
+  const skuMap = new Map();
+  const batchMap = new Map();
+  // Load existing data into the map
+  for (const entry of existing.invSku) {
+    skuMap.set(entry.s, { ...entry, m: { ...entry.m }, rt: { ...entry.rt } });
+    // Deep-copy monthly and rt sub-objects
+    for (const m in skuMap.get(entry.s).m) skuMap.get(entry.s).m[m] = { ...entry.m[m] };
+    for (const r in skuMap.get(entry.s).rt) skuMap.get(entry.s).rt[r] = { ...entry.rt[r] };
+  }
+
+  // Merge delta rows on top
+  for (const row of delta.invSku) {
+    if (!skuMap.has(row.s)) {
+      skuMap.set(row.s, { ...row, m: {}, rt: {} });
+      const e = skuMap.get(row.s); e.ti = 0; e.to = 0; e.net = 0; e.bc = 0;
+      for (const m in row.m) e.m[m] = { ...row.m[m] };
+      for (const r in row.rt) e.rt[r] = { ...row.rt[r] };
+      e.ti = row.ti; e.to = row.to; e.net = row.net; e.bc = row.bc;
+    } else {
+      const entry = skuMap.get(row.s);
+      for (const m in row.m) {
+        if (!entry.m[m]) entry.m[m] = { i: 0, o: 0 };
+        entry.m[m].i += row.m[m].i; entry.m[m].o += row.m[m].o;
+      }
+      for (const r in row.rt) {
+        if (!entry.rt[r]) entry.rt[r] = { i: 0, o: 0 };
+        entry.rt[r].i += row.rt[r].i; entry.rt[r].o += row.rt[r].o;
+      }
+      entry.ti += row.ti; entry.to += row.to; entry.net += row.net; entry.bc += row.bc;
+      if (row.p && !entry.p) entry.p = row.p;
+      if (row.c && !entry.c) entry.c = row.c;
+      if (row.u && !entry.u) entry.u = row.u;
+    }
+  }
+
+  // Rebuild aggregations from merged SKU data
+  const catAgg = {}, rtAgg = {}, monthSet = new Set();
+  for (const entry of skuMap.values()) {
+    for (const m in entry.m) {
+      monthSet.add(m);
+      const cat = entry.c || '';
+      if (!catAgg[cat]) catAgg[cat] = {};
+      if (!catAgg[cat][m]) catAgg[cat][m] = { i: 0, o: 0 };
+      catAgg[cat][m].i += entry.m[m].i; catAgg[cat][m].o += entry.m[m].o;
+    }
+    for (const r in entry.rt) {
+      for (const m in entry.m) {
+        if (!rtAgg[r]) rtAgg[r] = {};
+        if (!rtAgg[r][m]) rtAgg[r][m] = { i: 0, o: 0 };
+      }
+    }
+  }
+  // Rebuild rtAgg properly from SKU-level rt data and monthly data
+  for (const entry of skuMap.values()) {
+    for (const r in entry.rt) {
+      if (!rtAgg[r]) rtAgg[r] = {};
+      // Distribute rt totals across months proportionally isn't possible without raw data
+      // So we store rt totals at a summary level from the merged SKU data
+    }
+  }
+  // Simpler: rebuild rtAgg from existing + delta rtAgg
+  const mergedRtAgg = {};
+  for (const src of [existing.invRt || {}, delta.invRt || {}]) {
+    for (const r in src) {
+      if (!mergedRtAgg[r]) mergedRtAgg[r] = {};
+      for (const m in src[r]) {
+        if (!mergedRtAgg[r][m]) mergedRtAgg[r][m] = { i: 0, o: 0 };
+        mergedRtAgg[r][m].i += src[r][m].i; mergedRtAgg[r][m].o += src[r][m].o;
+      }
+    }
+  }
+  // Same for catAgg
+  const mergedCatAgg = {};
+  for (const src of [existing.invCat || {}, delta.invCat || {}]) {
+    for (const c in src) {
+      if (!mergedCatAgg[c]) mergedCatAgg[c] = {};
+      for (const m in src[c]) {
+        if (!mergedCatAgg[c][m]) mergedCatAgg[c][m] = { i: 0, o: 0 };
+        mergedCatAgg[c][m].i += src[c][m].i; mergedCatAgg[c][m].o += src[c][m].o;
+      }
+    }
+  }
+
+  const months = [...new Set([...(existing.months || []), ...(delta.months || [])])].sort();
+  return { invSku: [...skuMap.values()], invCat: mergedCatAgg, invRt: mergedRtAgg, months };
 }
 
 /* ───────── shared ───────── */
@@ -306,6 +459,7 @@ function InvUploadModal({ onClose, onUploaded }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [mode, setMode] = useState("replace"); // "replace" or "merge"
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -328,16 +482,25 @@ function InvUploadModal({ onClose, onUploaded }) {
     if (!parsed) return;
     setSaving(true);
     try {
+      let finalData;
+      if (mode === "merge") {
+        // Load existing persisted data to merge with
+        const existing = await fetch("/api/data/inventory").then(r => r.json());
+        const base = (existing.exists && existing.value) ? existing.value : { invSku: D.invSku, invCat: D.invCat, invRt: D.invRt, months: D.months };
+        finalData = mergeInventoryData(base, parsed);
+      } else {
+        finalData = { invSku: parsed.invSku, invCat: parsed.invCat, invRt: parsed.invRt, months: parsed.months };
+      }
       const res = await fetch("/api/data/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify(finalData),
       });
       if (!res.ok) throw new Error("Server error: " + res.status);
-      D.invSku = parsed.invSku;
-      D.invCat = parsed.invCat;
-      D.invRt = parsed.invRt;
-      D.months = parsed.months;
+      D.invSku = finalData.invSku;
+      D.invCat = finalData.invCat;
+      D.invRt = finalData.invRt;
+      D.months = finalData.months;
       onUploaded();
       onClose();
     } catch (err) {
@@ -347,29 +510,41 @@ function InvUploadModal({ onClose, onUploaded }) {
   };
 
   const cats = parsed ? [...new Set(parsed.invSku.map(s => s.c))].sort() : [];
+  const hasExisting = D.invSku && D.invSku.length > 0;
+  const btnStyle = (active) => ({padding:"6px 14px",fontSize:11,fontWeight:600,fontFamily:"inherit",cursor:"pointer",borderRadius:4,border:"1px solid "+(active?"#3b82f6":"#334155"),background:active?"#1e3a5f":"transparent",color:active?"#60a5fa":"#64748b"});
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}} onClick={onClose}>
-      <div style={{background:"#0f172a",border:"1px solid #334155",borderRadius:10,padding:24,width:480,maxWidth:"90vw",color:"#e2e8f0",fontFamily:sans}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:"#0f172a",border:"1px solid #334155",borderRadius:10,padding:24,width:520,maxWidth:"90vw",color:"#e2e8f0",fontFamily:sans}} onClick={e=>e.stopPropagation()}>
         <h3 style={{margin:"0 0 16px",fontSize:16,fontWeight:700}}>Upload Inventory CSV</h3>
         <p style={{fontSize:11,color:"#94a3b8",margin:"0 0 12px"}}>
-          Required columns: <code style={{background:"#1e293b",padding:"1px 4px",borderRadius:3}}>sku, product, category, unit, month, ref_type, inbound, outbound</code>
-          <br/>Optional: <code style={{background:"#1e293b",padding:"1px 4px",borderRadius:3}}>batch_count</code>
-          &nbsp;| Month format: <code style={{background:"#1e293b",padding:"1px 4px",borderRadius:3}}>YYYY-MM</code>
+          Accepts Inventory Movement Details Report exports directly, or any CSV with <code style={{background:"#1e293b",padding:"1px 4px",borderRadius:3}}>SKU</code>, <code style={{background:"#1e293b",padding:"1px 4px",borderRadius:3}}>Date</code>, <code style={{background:"#1e293b",padding:"1px 4px",borderRadius:3}}>Quantity in</code>, <code style={{background:"#1e293b",padding:"1px 4px",borderRadius:3}}>Quantity out</code> columns.
         </p>
         <input type="file" accept=".csv" onChange={handleFile} style={{fontSize:12,marginBottom:12,color:"#e2e8f0"}}/>
+
+        {parsed && hasExisting && (
+          <div style={{display:"flex",gap:6,marginBottom:12}}>
+            <button onClick={()=>setMode("replace")} style={btnStyle(mode==="replace")}>Replace All</button>
+            <button onClick={()=>setMode("merge")} style={btnStyle(mode==="merge")}>Merge / Add Delta</button>
+          </div>
+        )}
+
         {error && <div style={{background:"#450a0a",border:"1px solid #dc2626",borderRadius:6,padding:10,fontSize:12,color:"#fca5a5",marginBottom:12}}>{error}</div>}
         {parsed && (
           <div style={{background:"#1e293b",borderRadius:6,padding:12,marginBottom:12,fontSize:12}}>
-            <div style={{fontWeight:600,marginBottom:6,color:"#4ade80"}}>Preview — {fileName}</div>
-            <div><strong>{parsed.invSku.length}</strong> SKUs across <strong>{parsed.months.length}</strong> months</div>
+            <div style={{fontWeight:600,marginBottom:6,color:"#4ade80"}}>Parsed — {fileName}</div>
+            <div><strong>{parsed.rowCount.toLocaleString()}</strong> rows &rarr; <strong>{parsed.invSku.length}</strong> SKUs across <strong>{parsed.months.length}</strong> months</div>
             <div><strong>{cats.length}</strong> categories: {cats.join(", ")}</div>
-            <div style={{marginTop:4,color:"#facc15",fontSize:11}}>This will replace all current inventory data.</div>
+            <div style={{marginTop:6,fontSize:11,color:mode==="merge"?"#60a5fa":"#facc15"}}>
+              {mode==="merge"
+                ? "New data will be added to existing inventory (totals will accumulate)."
+                : "This will replace all current inventory data."}
+            </div>
           </div>
         )}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <button onClick={onClose} style={{padding:"6px 16px",fontSize:12,background:"transparent",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,cursor:"pointer",fontFamily:"inherit"}}>Cancel</button>
-          <button onClick={handleConfirm} disabled={!parsed||saving} style={{padding:"6px 16px",fontSize:12,background:parsed&&!saving?"#3b82f6":"#1e293b",color:parsed&&!saving?"#fff":"#475569",border:"none",borderRadius:6,cursor:parsed&&!saving?"pointer":"default",fontWeight:600,fontFamily:"inherit"}}>{saving?"Saving...":"Confirm Upload"}</button>
+          <button onClick={handleConfirm} disabled={!parsed||saving} style={{padding:"6px 16px",fontSize:12,background:parsed&&!saving?"#3b82f6":"#1e293b",color:parsed&&!saving?"#fff":"#475569",border:"none",borderRadius:6,cursor:parsed&&!saving?"pointer":"default",fontWeight:600,fontFamily:"inherit"}}>{saving?(mode==="merge"?"Merging...":"Replacing..."):"Confirm "+(mode==="merge"?"Merge":"Replace")}</button>
         </div>
       </div>
     </div>
