@@ -457,6 +457,7 @@ function tryResumeSession(){
 function showApp(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('main-app').style.display='';
+  window.currentUser=currentUser;
   const isAdmin=currentUser.role==='admin';
   document.getElementById('tab-admin-btn').style.display=isAdmin?'':'none';
   document.getElementById('user-badge').innerHTML=
