@@ -173,8 +173,10 @@ app.post("/api/import-excel/parse", upload.single("file"), (req, res) => {
           });
         });
       } else {
-        const orderId = mos[0];
-        if (!orderId) continue;   // no valid MO number — skip
+        // If no MO number, generate a stable placeholder from WIP code + machine + start date
+        const wipMatch = rawSKU.match(/WIP[-\s]?([\w-]+)/i);
+        const wipCode = wipMatch ? wipMatch[1].replace(/\s+/g, "-") : "UNK";
+        const orderId = mos[0] || `TBD-${machKey}-${(start || "").replace(/-/g, "")}`;
         const extra = mos.slice(1);
         const notes = [rawNotes, extra.length ? `Also: ${extra.join(", ")}` : ""]
           .filter(Boolean).join(" · ");
