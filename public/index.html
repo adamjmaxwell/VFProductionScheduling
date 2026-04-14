@@ -867,7 +867,7 @@ function saveOrder(){
   const cat=document.getElementById('f-cat').value,sub=document.getElementById('f-sub').value;
   if(!cat||!sub){alert('Please select a product category and subtype.');return;}
   const qty=parseFloat(document.getElementById('f-qty').value)||0,batches=parseInt(document.getElementById('f-batches').value)||1;
-  if(qty<=0){alert('Please enter a batch quantity.');return;}
+  if(qty<0){alert('Batch quantity cannot be negative.');return;}
   const c=BATCH_C[sub];
   if(c){
     if(c.fixed&&qty!==c.fixed){if(!confirm(`Batch size should be ${c.fixed} kg. Save anyway?`))return;}
