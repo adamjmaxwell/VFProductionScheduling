@@ -148,6 +148,18 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
 .admin-table th{text-align:left;padding:8px 12px;color:var(--color-text-secondary);font-weight:400;font-size:11px;border-bottom:0.5px solid var(--color-border-tertiary);text-transform:uppercase;letter-spacing:0.03em;}
 .admin-table td{padding:8px 12px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:middle;}
 .admin-table tr:hover td{background:var(--color-background-secondary);}
+.prod-table-wrap{overflow-x:auto;margin-top:12px;}
+table.prod-table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px;}
+table.prod-table th{text-align:left;padding:8px 10px;color:var(--color-text-secondary);font-weight:500;font-size:11px;border-bottom:2px solid var(--color-border-tertiary);background:var(--color-background-secondary);text-transform:uppercase;letter-spacing:0.03em;white-space:nowrap;position:sticky;top:0;z-index:1;}
+table.prod-table td{padding:7px 10px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:top;}
+table.prod-table tr:hover td{background:var(--color-background-secondary);}
+table.prod-table .zone-label{background:var(--color-background-tertiary);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-text-secondary);padding:10px;}
+table.prod-table .buffer-row td{background:#f0f7f4;font-style:italic;color:var(--color-text-secondary);}
+table.prod-table .flow-tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:500;}
+table.prod-table .flow-batch{background:#FAEEDA;color:#633806;}
+table.prod-table .flow-continuous{background:#E1F5EE;color:#085041;}
+table.prod-table .flow-buffer{background:#E8EDF5;color:#3A4A6B;}
+table.prod-table .arrow{color:var(--color-text-tertiary);font-size:11px;}
 .role-admin{background:#FCEBEB;color:#A32D2D;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500;}
 .role-operator{background:#E6F1FB;color:#0C447C;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500;}
 .role-viewer{background:#F1EFE8;color:#444441;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500;}
@@ -186,6 +198,7 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     <button class="tab active" onclick="switchTab('calendar')">Calendar</button>
     <button class="tab" onclick="switchTab('orders')">Work orders</button>
     <button class="tab" onclick="switchTab('capacity')">Capacity &amp; ops</button>
+    <button class="tab" onclick="switchTab('prodtable')">Production table</button>
     <button class="tab" onclick="switchTab('traceability')">Traceability</button>
     <button class="tab" onclick="switchTab('admin')" id="tab-admin-btn" style="display:none;">Admin console</button>
   </div>
@@ -255,6 +268,317 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
       <div><strong style="color:var(--color-text-primary);">Fat type:</strong> CBS = non-tempering (East Mac) · CBE = tempering (West Mac)</div>
       <div><strong style="color:var(--color-text-primary);">EU/US:</strong> Cannot be mixed on same batch</div>
       <div><strong style="color:var(--color-text-primary);">Roasting yield:</strong> ~68–73%. First batch post-changeover may be scrap/QA hold.</div>
+    </div>
+  </div>
+
+  <!-- PRODUCTION TABLE -->
+  <div id="tab-prodtable" style="display:none;">
+    <div class="header"><h2>Production line — Seed cleaning to deposition</h2></div>
+    <p style="font-size:12px;color:var(--color-text-secondary);margin-bottom:4px;">Full CFC process cell (MAS-PC-01) from grapeseed intake through finished drops. Buffer tanks shown inline between process steps.</p>
+    <div class="prod-table-wrap">
+      <table class="prod-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Equipment ID</th>
+            <th>Equipment name</th>
+            <th>Process type</th>
+            <th>Flow type</th>
+            <th>Capacity / batch</th>
+            <th>Cycle time</th>
+            <th>Receives from</th>
+            <th>Sends to</th>
+            <th>Controller</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- ZONE 1 — SEED PREP & ROASTING -->
+          <tr><td colspan="11" class="zone-label">Zone 1 — Seed prep &amp; roasting</td></tr>
+          <tr>
+            <td>1</td>
+            <td>—</td>
+            <td>Seed cleaning</td>
+            <td>Cleaning / sorting</td>
+            <td><span class="flow-tag flow-batch">Batch</span></td>
+            <td>325 kg / batch</td>
+            <td>—</td>
+            <td>Raw grapeseed intake</td>
+            <td>Alkalizer (WC-ALK-01)</td>
+            <td>—</td>
+            <td>Pre-roasting step for all product lines</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>WC-ALK-01</td>
+            <td>Alkalizer</td>
+            <td>NaOH treatment (dutching)</td>
+            <td><span class="flow-tag flow-batch">Batch</span></td>
+            <td>500 kg / batch</td>
+            <td>60 hr cycle</td>
+            <td>Seed cleaning</td>
+            <td>Roaster (WC-RST-01)</td>
+            <td>AB ControlLogix</td>
+            <td>Alkaline wash before roasting</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>WC-RST-01</td>
+            <td>Roaster</td>
+            <td>Dutching / roast</td>
+            <td><span class="flow-tag flow-batch">Batch</span></td>
+            <td>500 kg / batch (output ~325 kg)</td>
+            <td>60 hr cycle · up to 4 batches/shift</td>
+            <td>Alkalizer (WC-ALK-01)</td>
+            <td>Grapeseed Hopper (WC-HOP-01)</td>
+            <td>AB ControlLogix</td>
+            <td>Yield ~68–73%. First batch post-changeover may be scrap/QA hold</td>
+          </tr>
+          <tr class="buffer-row">
+            <td></td>
+            <td>WC-HOP-01</td>
+            <td>Grapeseed Hopper</td>
+            <td>Buffer — roasted seed</td>
+            <td><span class="flow-tag flow-buffer">Buffer</span></td>
+            <td>5,000 kg capacity</td>
+            <td>—</td>
+            <td>Roaster (WC-RST-01)</td>
+            <td>East Mcintyre CBS (WC-MCB-01) · West Mcintyre CBE (WC-MCE-01)</td>
+            <td>AB ControlLogix</td>
+            <td>Feeds both Mcintyres</td>
+          </tr>
+
+          <!-- ZONE 1 — MCINTYRES (LIQUOR PRODUCTION) -->
+          <tr><td colspan="11" class="zone-label">Zone 1 — Mcintyres (liquor production)</td></tr>
+          <tr>
+            <td>4</td>
+            <td>WC-MCB-01</td>
+            <td>Mcintyre CBS (East Mac)</td>
+            <td>Milling — CBS liquor production</td>
+            <td><span class="flow-tag flow-batch">Batch</span></td>
+            <td>2,250 – 4,300 kg / batch (5,000 kg max)</td>
+            <td>~6,000 hr cycle</td>
+            <td>Grapeseed Hopper (WC-HOP-01) · Fat Tank (WC-FTK-01)</td>
+            <td>CBS Holding Tank (WC-HCS-01)</td>
+            <td>Siemens S7-1500</td>
+            <td>Non-tempering · EU/US cannot be mixed. BOM: 70% DRGS + 30% CBS fat</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>WC-MCE-01</td>
+            <td>Mcintyre CBE (West Mac)</td>
+            <td>Milling — CBE liquor production</td>
+            <td><span class="flow-tag flow-batch">Batch</span></td>
+            <td>2,250 – 4,300 kg / batch (5,000 kg max)</td>
+            <td>~6,000 hr cycle</td>
+            <td>Grapeseed Hopper (WC-HOP-01) · Fat Tank (WC-FTK-01)</td>
+            <td>CBE Holding Tank (WC-HCB-01)</td>
+            <td>Siemens S7-1500</td>
+            <td>Tempering · EU/US cannot be mixed. BOM: 70% DRGS + 30% CBE fat</td>
+          </tr>
+          <tr class="buffer-row">
+            <td></td>
+            <td>WC-FTK-01</td>
+            <td>Fat Tank</td>
+            <td>Buffer — CBS/CBE fat storage</td>
+            <td><span class="flow-tag flow-buffer">Buffer</span></td>
+            <td>10,000 kg capacity</td>
+            <td>—</td>
+            <td>External receipt</td>
+            <td>East Mcintyre (WC-MCB-01) · West Mcintyre (WC-MCE-01) · Fat Melter</td>
+            <td>AB ControlLogix</td>
+            <td>Stores both CBS and CBE fat. Also supplies fat melter for chocolate line</td>
+          </tr>
+          <tr class="buffer-row">
+            <td></td>
+            <td>WC-HCS-01</td>
+            <td>CBS Holding Tank</td>
+            <td>Buffer — CBS liquor hold</td>
+            <td><span class="flow-tag flow-buffer">Buffer</span></td>
+            <td>10,000 kg capacity</td>
+            <td>—</td>
+            <td>Mcintyre CBS (WC-MCB-01)</td>
+            <td>Mac Packout · Mixer (WC-MIX-01) for chocolate line</td>
+            <td>AB ControlLogix</td>
+            <td>Post-mill CBS liquor storage before packout or chocolate production</td>
+          </tr>
+          <tr class="buffer-row">
+            <td></td>
+            <td>WC-HCB-01</td>
+            <td>CBE Holding Tank</td>
+            <td>Buffer — CBE liquor hold</td>
+            <td><span class="flow-tag flow-buffer">Buffer</span></td>
+            <td>10,000 kg capacity</td>
+            <td>—</td>
+            <td>Mcintyre CBE (WC-MCE-01)</td>
+            <td>Mac Packout · Mixer (WC-MIX-01) for chocolate line</td>
+            <td>AB ControlLogix</td>
+            <td>Post-mill CBE liquor storage before packout or chocolate production</td>
+          </tr>
+
+          <!-- ZONE 2 — CHOCOLATE MAKING -->
+          <tr><td colspan="11" class="zone-label">Zone 2 — Chocolate making (mass line)</td></tr>
+          <tr>
+            <td>6</td>
+            <td>WC-MIX-01</td>
+            <td>Mixer</td>
+            <td>CFC premix blending</td>
+            <td><span class="flow-tag flow-batch">Batch</span></td>
+            <td>1,500 kg / batch</td>
+            <td>15 min cycle</td>
+            <td>CBS Holding Tank (WC-HCS-01) or CBE Holding Tank (WC-HCB-01) · Fat Tank (WC-FTK-01)</td>
+            <td>2 Roll Refiner (WC-2RR-01)</td>
+            <td>AB ControlLogix</td>
+            <td>Blends liquor + fat + ingredients into premix for refining</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>WC-2RR-01</td>
+            <td>2 Roll Refiner</td>
+            <td>Coarse refine</td>
+            <td><span class="flow-tag flow-continuous">Continuous</span></td>
+            <td>1,000 kg/hr throughput</td>
+            <td>Continuous</td>
+            <td>Mixer (WC-MIX-01)</td>
+            <td>5 Roll Refiner (WC-5RR-01)</td>
+            <td>Siemens S7-1500</td>
+            <td>First-pass particle size reduction</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>WC-5RR-01</td>
+            <td>5 Roll Refiner</td>
+            <td>Fine refine (D90 &lt; 25 &micro;m)</td>
+            <td><span class="flow-tag flow-continuous">Continuous</span></td>
+            <td>1,000 kg/hr throughput</td>
+            <td>Continuous</td>
+            <td>2 Roll Refiner (WC-2RR-01)</td>
+            <td>CBS Conche (WC-CCH-01) or CBE Conche (WC-ECH-01)</td>
+            <td>Siemens S7-1500</td>
+            <td>B&uuml;hler Finer S 1800 V · Target particle size D90 &lt; 25 &micro;m</td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>WC-CCH-01</td>
+            <td>CBS Conche</td>
+            <td>CBS conching</td>
+            <td><span class="flow-tag flow-batch">Batch</span></td>
+            <td>3,000 – 6,000 kg / batch</td>
+            <td>~600 hr cycle</td>
+            <td>5 Roll Refiner (WC-5RR-01)</td>
+            <td>CBS Post-Conche Holding Tank (WC-SHT-01)</td>
+            <td>Siemens S7-1500</td>
+            <td>D&Uuml;C conche · CBS (non-tempering) product</td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>WC-ECH-01</td>
+            <td>CBE Conche</td>
+            <td>CBE conching</td>
+            <td><span class="flow-tag flow-batch">Batch</span></td>
+            <td>3,000 – 6,000 kg / batch</td>
+            <td>~600 hr cycle</td>
+            <td>5 Roll Refiner (WC-5RR-01)</td>
+            <td>CBE Post-Conche Holding Tank (WC-EHT-01)</td>
+            <td>Siemens S7-1500</td>
+            <td>D&Uuml;C conche · CBE (tempering) product</td>
+          </tr>
+          <tr class="buffer-row">
+            <td></td>
+            <td>WC-SHT-01</td>
+            <td>CBS Post-Conche Holding Tank</td>
+            <td>Buffer — post-conche CBS hold</td>
+            <td><span class="flow-tag flow-buffer">Buffer</span></td>
+            <td>10,000 kg capacity</td>
+            <td>—</td>
+            <td>CBS Conche (WC-CCH-01)</td>
+            <td>CBS Day Tank (WC-SDT-01)</td>
+            <td>AB ControlLogix</td>
+            <td>Holds finished CBS conched mass before tempering</td>
+          </tr>
+          <tr class="buffer-row">
+            <td></td>
+            <td>WC-EHT-01</td>
+            <td>CBE Post-Conche Holding Tank</td>
+            <td>Buffer — post-conche CBE hold</td>
+            <td><span class="flow-tag flow-buffer">Buffer</span></td>
+            <td>10,000 kg capacity</td>
+            <td>—</td>
+            <td>CBE Conche (WC-ECH-01)</td>
+            <td>CBE Day Tank (WC-EDT-01)</td>
+            <td>AB ControlLogix</td>
+            <td>Holds finished CBE conched mass before tempering</td>
+          </tr>
+          <tr class="buffer-row">
+            <td></td>
+            <td>WC-SDT-01</td>
+            <td>CBS Day Tank</td>
+            <td>Buffer — CBS feed to tempering</td>
+            <td><span class="flow-tag flow-buffer">Buffer</span></td>
+            <td>3,800 kg capacity</td>
+            <td>—</td>
+            <td>CBS Post-Conche Holding Tank (WC-SHT-01)</td>
+            <td>Tempering Machine (WC-TMP-01)</td>
+            <td>AB ControlLogix</td>
+            <td>Day supply buffer feeding tempering line</td>
+          </tr>
+          <tr class="buffer-row">
+            <td></td>
+            <td>WC-EDT-01</td>
+            <td>CBE Day Tank</td>
+            <td>Buffer — CBE feed to tempering</td>
+            <td><span class="flow-tag flow-buffer">Buffer</span></td>
+            <td>3,800 kg capacity</td>
+            <td>—</td>
+            <td>CBE Post-Conche Holding Tank (WC-EHT-01)</td>
+            <td>Tempering Machine (WC-TMP-01)</td>
+            <td>AB ControlLogix</td>
+            <td>Day supply buffer feeding tempering line</td>
+          </tr>
+
+          <!-- ZONE 2 — TEMPERING & DEPOSITION -->
+          <tr><td colspan="11" class="zone-label">Zone 2 — Tempering &amp; deposition</td></tr>
+          <tr>
+            <td>11</td>
+            <td>WC-TMP-01</td>
+            <td>Tempering Machine</td>
+            <td>CFC conditioning</td>
+            <td><span class="flow-tag flow-continuous">Continuous</span></td>
+            <td>1,000 kg/hr throughput</td>
+            <td>Continuous</td>
+            <td>CBS Day Tank (WC-SDT-01) or CBE Day Tank (WC-EDT-01)</td>
+            <td>Drops Line (WC-DRP-01)</td>
+            <td>AB ControlLogix</td>
+            <td>CBS — no &beta;-V crystal needed. CBE — full tempering cycle</td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>WC-DRP-01</td>
+            <td>Drops Line (Depositor)</td>
+            <td>Deposit + cool drops</td>
+            <td><span class="flow-tag flow-continuous">Continuous</span></td>
+            <td>1,000 kg/hr throughput</td>
+            <td>Continuous</td>
+            <td>Tempering Machine (WC-TMP-01)</td>
+            <td>Packoff Line (WC-PKG-01)</td>
+            <td>Siemens S7-1500</td>
+            <td>B&uuml;hler DropsMaster · Deposits and cools finished drops</td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>WC-PKG-01</td>
+            <td>Packoff Line</td>
+            <td>Weigh, fill, seal, pallet</td>
+            <td><span class="flow-tag flow-continuous">Continuous</span></td>
+            <td>1,000 kg/hr throughput</td>
+            <td>Continuous</td>
+            <td>Drops Line (WC-DRP-01)</td>
+            <td>Finished goods warehouse</td>
+            <td>AB ControlLogix</td>
+            <td>50 lb cases · GS1 barcoding</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -724,10 +1048,10 @@ function shortSku(s){
 
 function switchTab(t){
   if(t==='admin'&&(!currentUser||currentUser.role!=='admin'))return;
-  ['calendar','orders','capacity','traceability','admin'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
+  ['calendar','orders','capacity','prodtable','traceability','admin'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
   document.querySelectorAll('.tab').forEach(el=>{
     const tabName=el.textContent.trim().toLowerCase();
-    const map={'calendar':'calendar','work orders':'orders','capacity & ops':'capacity','capacity &amp; ops':'capacity','traceability':'traceability','admin console':'admin'};
+    const map={'calendar':'calendar','work orders':'orders','capacity & ops':'capacity','capacity &amp; ops':'capacity','production table':'prodtable','traceability':'traceability','admin console':'admin'};
     el.classList.toggle('active',map[tabName]===t);
   });
   if(t==='calendar')renderCal();
