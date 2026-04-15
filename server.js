@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const XLSX = require("xlsx");
+const Anthropic = require("@anthropic-ai/sdk");
 
 // ── Excel import helpers ──────────────────────────────────────────────────────
 
@@ -194,6 +195,201 @@ app.post("/api/import-excel/parse", upload.single("file"), (req, res) => {
   } catch (e) {
     console.error("Excel parse error:", e);
     res.status(400).json({ ok: false, error: e.message });
+  }
+});
+
+// ── Claude AI Chat ────────────────────────────────────────────────────────────
+
+const AI_SYSTEM = `You are a production scheduling assistant for Voyage Foods. You help manage the production schedule across multiple machines and zones.
+
+Machines (use these exact keys):
+- Zone 1 Seed prep: seed_clean (Seed Cleaning), roaster (Alk/Roaster)
+- Zone 1 Mcintyres: east_mac (East Mac CBS), west_mac (West Mac CBE), mac_1250 (1250 Mac), mac_packout (Mac Packout)
+- Zone 2 Chocolate: fat_melter (Fat Melter), refining (Refining), conching (Conching), depositing (Depositing)
+
+Order statuses: queued, in-progress, complete, on-hold
+Order priorities: high, med, low
+
+IMPORTANT: Before calling any write tools (shift_machine_orders, update_order_dates, update_order_status), you MUST:
+1. Use get_orders to see the current state
+2. Clearly describe to the user exactly what changes you plan to make
+3. Wait for them to explicitly confirm (e.g. "yes", "go ahead", "confirm") before executing writes
+
+Dates are always in YYYY-MM-DD format.`;
+
+const AI_TOOLS = [
+  {
+    name: "get_orders",
+    description: "Get all current work orders from the production schedule. Always call this first to understand the current state before proposing changes.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "shift_machine_orders",
+    description: "Shift all production orders for a specific machine by a number of days. Updates start, end, and due dates. Only affects non-completed orders.",
+    input_schema: {
+      type: "object",
+      properties: {
+        machine: { type: "string", description: "Machine key (e.g. east_mac, west_mac, roaster, refining, conching, depositing, mac_1250, mac_packout, seed_clean, fat_melter)" },
+        days: { type: "number", description: "Number of days to shift (positive = forward in time, negative = backward)" },
+      },
+      required: ["machine", "days"],
+    },
+  },
+  {
+    name: "update_order_dates",
+    description: "Update the start and/or end date of a specific work order by its order ID.",
+    input_schema: {
+      type: "object",
+      properties: {
+        order_id: { type: "string", description: "The orderId field of the order (e.g. MO-12345 or TBD-roaster-20260401)" },
+        start: { type: "string", description: "New start date in YYYY-MM-DD format (omit to leave unchanged)" },
+        end: { type: "string", description: "New end date in YYYY-MM-DD format (omit to leave unchanged)" },
+      },
+      required: ["order_id"],
+    },
+  },
+  {
+    name: "update_order_status",
+    description: "Update the status of a specific work order.",
+    input_schema: {
+      type: "object",
+      properties: {
+        order_id: { type: "string", description: "The orderId field of the order" },
+        status: { type: "string", enum: ["queued", "in-progress", "complete", "on-hold"] },
+      },
+      required: ["order_id", "status"],
+    },
+  },
+];
+
+function shiftDate(dateStr, days) {
+  if (!dateStr) return dateStr;
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function executeAITool(name, input) {
+  const orders = readData("vf_orders") || [];
+  switch (name) {
+    case "get_orders": {
+      const summary = orders.map(o => ({
+        orderId: o.orderId || o.id,
+        sku: o.sku,
+        machine: o.machine,
+        start: o.start,
+        end: o.end,
+        status: o.status,
+        priority: o.priority,
+        qty: o.qty,
+      }));
+      return { count: summary.length, orders: summary };
+    }
+
+    case "shift_machine_orders": {
+      const { machine, days } = input;
+      const affected = orders.filter(o => o.machine === machine && o.status !== "complete");
+      if (!affected.length) {
+        return { ok: true, affected: 0, message: `No active orders found for machine '${machine}'` };
+      }
+      affected.forEach(order => {
+        const idx = orders.findIndex(o => o.id === order.id);
+        if (idx !== -1) {
+          orders[idx].start = shiftDate(orders[idx].start, days);
+          orders[idx].end   = shiftDate(orders[idx].end,   days);
+          orders[idx].due   = shiftDate(orders[idx].due,   days);
+        }
+      });
+      writeData("vf_orders", orders);
+      return {
+        ok: true,
+        affected: affected.length,
+        message: `Shifted ${affected.length} order(s) on '${machine}' by ${days > 0 ? "+" : ""}${days} days`,
+        orders: affected.map(o => o.orderId || o.id),
+      };
+    }
+
+    case "update_order_dates": {
+      const { order_id, start, end } = input;
+      const idx = orders.findIndex(o => o.orderId === order_id || o.id === order_id);
+      if (idx === -1) return { ok: false, error: `Order '${order_id}' not found` };
+      if (start) orders[idx].start = start;
+      if (end)   { orders[idx].end = end; orders[idx].due = end; }
+      writeData("vf_orders", orders);
+      return { ok: true, message: `Updated order '${order_id}'`, start: orders[idx].start, end: orders[idx].end };
+    }
+
+    case "update_order_status": {
+      const { order_id, status } = input;
+      const idx = orders.findIndex(o => o.orderId === order_id || o.id === order_id);
+      if (idx === -1) return { ok: false, error: `Order '${order_id}' not found` };
+      orders[idx].status = status;
+      writeData("vf_orders", orders);
+      return { ok: true, message: `Order '${order_id}' status set to '${status}'` };
+    }
+
+    default:
+      return { ok: false, error: `Unknown tool: ${name}` };
+  }
+}
+
+app.post("/api/chat", async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ ok: false, error: "AI assistant is not configured (missing ANTHROPIC_API_KEY)" });
+  }
+  const { messages } = req.body;
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ ok: false, error: "messages array required" });
+  }
+
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    let currentMessages = messages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+    let response;
+
+    // Agentic loop — max 8 tool-use rounds
+    for (let i = 0; i < 8; i++) {
+      response = await client.messages.create({
+        model: "claude-opus-4-6",
+        max_tokens: 4096,
+        system: AI_SYSTEM,
+        tools: AI_TOOLS,
+        messages: currentMessages,
+      });
+
+      if (response.stop_reason !== "tool_use") break;
+
+      // Execute all tool calls
+      const toolUseBlocks = response.content.filter(b => b.type === "tool_use");
+      currentMessages.push({ role: "assistant", content: response.content });
+
+      const toolResults = await Promise.all(
+        toolUseBlocks.map(async block => ({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: JSON.stringify(await executeAITool(block.name, block.input)),
+        }))
+      );
+      currentMessages.push({ role: "user", content: toolResults });
+    }
+
+    // Extract the final text reply
+    const reply = (response.content || [])
+      .filter(b => b.type === "text")
+      .map(b => b.text)
+      .join("\n")
+      .trim();
+
+    // Append final assistant message to the conversation
+    currentMessages.push({ role: "assistant", content: response.content });
+
+    res.json({ ok: true, reply, messages: currentMessages });
+  } catch (e) {
+    console.error("AI chat error:", e);
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
