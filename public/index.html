@@ -171,6 +171,8 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
 .status-filters select{padding:6px 10px;font-size:13px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md,8px);background:var(--color-background-primary);color:var(--color-text-primary);font-family:inherit;}
 .status-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:1.25rem;}
 .no-inv-note{background:#FAEEDA;color:#633806;border-radius:var(--border-radius-md,8px);padding:8px 12px;font-size:12px;margin-bottom:1rem;}
+.badge-on-track{background:#EAF3DE;color:#27500A;}
+.badge-off-track{background:#FCEBEB;color:#A32D2D;}
 
 /* AI CHAT WIDGET */
 #ai-widget{position:fixed;bottom:24px;right:24px;z-index:8000;display:flex;flex-direction:column;align-items:flex-end;gap:12px;}
@@ -350,6 +352,7 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
               <th style="text-align:right;">Actual in</th>
               <th>Progress</th>
               <th>Status</th>
+              <th>Tracking</th>
             </tr>
           </thead>
           <tbody id="mo-status-tbody"></tbody>
@@ -1215,7 +1218,17 @@ async function renderMOStatus() {
     }
     if (!moId) status = 'no-mo';
 
-    return { o, moId, inv, planned, actual, pct, status };
+    // Tracking: only applies once start date has passed
+    const today = new Date().toISOString().slice(0, 10);
+    let tracking = null;
+    if (o.start && o.start <= today) {
+      const isComplete = (status === 'complete');
+      if (isComplete)                         tracking = 'on-track';
+      else if (o.end && o.end < today)        tracking = 'off-track';
+      else                                    tracking = 'on-track'; // started, end date not yet passed
+    }
+
+    return { o, moId, inv, planned, actual, pct, status, tracking };
   });
 
   // Summary counts
@@ -1271,7 +1284,7 @@ async function renderMOStatus() {
 
   document.getElementById('mo-status-tbody').innerHTML = filtered.length === 0
     ? `<tr><td colspan="8" class="empty">No orders match the current filters.</td></tr>`
-    : filtered.map(({ o, moId, actual, planned, pct, status }) => {
+    : filtered.map(({ o, moId, actual, planned, pct, status, tracking }) => {
         const moCell = moId
           ? `<span class="mo-id">${moId}</span>`
           : `<span class="tbd-id">${escapeHtml(o.orderId || '—')}</span>`;
@@ -1291,6 +1304,9 @@ async function renderMOStatus() {
           <td style="text-align:right;">${moId && hasInvData ? fmtQty(actual) : '—'}</td>
           <td style="white-space:nowrap;">${progressCell}</td>
           <td>${statusBadge(status)}</td>
+          <td>${tracking === 'on-track'  ? '<span class="badge badge-on-track">On track</span>'
+              : tracking === 'off-track' ? '<span class="badge badge-off-track">Off track</span>'
+              : ''}</td>
         </tr>`;
       }).join('');
 }
