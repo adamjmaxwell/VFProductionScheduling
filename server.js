@@ -521,15 +521,91 @@ function buildInventoryFromCin7(movements) {
 
 async function performCin7Sync() {
   const { movements, startDate, endDate } = await fetchCin7Movements();
-  const data = buildInventoryFromCin7(movements);
-  writeData("inventory", data);
+  const fresh    = buildInventoryFromCin7(movements);
+  const existing = readData("inventory");
+
+  let merged;
+  if (!existing || !existing.invSku || !existing.invSku.length) {
+    // No prior data — just write fresh
+    merged = fresh;
+  } else {
+    // Merge by calendar month:
+    //   months inside the sync window  → replaced by fresh Cin7 data
+    //   months outside the sync window → kept from existing storage
+    const syncMonths = new Set(fresh.months);
+
+    // ── invSku ──────────────────────────────────────────────────────────────
+    const skuMap = new Map();
+
+    // Seed with existing data, stripping months that the fresh pull covers
+    for (const e of existing.invSku) {
+      const entry = { ...e, m: {}, rt: { ...e.rt }, ti: 0, to: 0, net: 0, bc: e.bc || 0 };
+      for (const mo in e.m) {
+        if (!syncMonths.has(mo)) {
+          entry.m[mo]  = e.m[mo];
+          entry.ti    += e.m[mo].i;
+          entry.to    += e.m[mo].o;
+          entry.net   += e.m[mo].i - e.m[mo].o;
+        }
+      }
+      skuMap.set(e.s, entry);
+    }
+
+    // Layer fresh months on top
+    for (const e of fresh.invSku) {
+      if (!skuMap.has(e.s)) {
+        skuMap.set(e.s, { ...e });
+      } else {
+        const entry = skuMap.get(e.s);
+        for (const mo in e.m) {
+          entry.m[mo]  = e.m[mo];
+          entry.ti    += e.m[mo].i;
+          entry.to    += e.m[mo].o;
+          entry.net   += e.m[mo].i - e.m[mo].o;
+        }
+        // Fresh rt data wins for sync-window ref types
+        for (const rt in e.rt) entry.rt[rt] = e.rt[rt];
+        if (!entry.p && e.p) entry.p = e.p;
+      }
+    }
+
+    // ── catAgg / rtAgg — replace sync-window months, keep the rest ──────────
+    const mergeSrc = (old, next) => {
+      const out = {};
+      for (const key in old) {
+        out[key] = {};
+        for (const mo in old[key]) {
+          if (!syncMonths.has(mo)) out[key][mo] = old[key][mo];
+        }
+      }
+      for (const key in next) {
+        if (!out[key]) out[key] = {};
+        for (const mo in next[key]) out[key][mo] = next[key][mo];
+      }
+      return out;
+    };
+
+    // ── moMovements — keep historical, fresh wins for any MO it contains ────
+    const mergedMo = { ...(existing.moMovements || {}), ...fresh.moMovements };
+
+    merged = {
+      invSku:      [...skuMap.values()],
+      invCat:      mergeSrc(existing.invCat || {}, fresh.invCat),
+      invRt:       mergeSrc(existing.invRt  || {}, fresh.invRt),
+      months:      [...new Set([...(existing.months || []), ...fresh.months])].sort(),
+      moMovements: mergedMo,
+    };
+  }
+
+  writeData("inventory", merged);
+
   const status = {
     ok:            true,
     lastSync:      new Date().toISOString(),
     source:        "cin7",
     movementCount: movements.length,
-    skuCount:      data.invSku.length,
-    moCount:       Object.keys(data.moMovements).length,
+    skuCount:      merged.invSku.length,
+    moCount:       Object.keys(merged.moMovements).length,
     startDate,
     endDate,
   };
