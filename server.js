@@ -4,6 +4,7 @@ const fs = require("fs");
 const multer = require("multer");
 const XLSX = require("xlsx");
 const Anthropic = require("@anthropic-ai/sdk");
+const cron      = require("node-cron");
 
 // ── Excel import helpers ──────────────────────────────────────────────────────
 
@@ -394,6 +395,193 @@ app.post("/api/chat", async (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// ── Cin7 Core sync ────────────────────────────────────────────────────────────
+// Field-name map — if the first run shows different keys in /api/sync-cin7/test,
+// update the values here and redeploy.
+const C7 = {
+  base:       "https://inventory.dearsystems.com/ExternalApi/v2",
+  path:       "/inventorymovements",
+  arrKey:     "InventoryMovements",   // top-level array key in response
+  sku:        "SKU",
+  name:       "Name",
+  category:   "Category",
+  unit:       "Unit",
+  date:       "Date",                 // ISO string or YYYY-MM-DD
+  reason:     "Reason",               // reference type (e.g. "Manufacturing Order")
+  reference:  "Reference",            // MO number (e.g. "MO-00728")
+  qtyIn:      "QtyIN",
+  qtyOut:     "QtyOUT",
+};
+
+const CIN7_SYNC_DAYS = parseInt(process.env.CIN7_SYNC_DAYS || "90", 10);
+
+function cin7Headers() {
+  return {
+    "api-auth-accountid":      process.env.CIN7_ACCOUNT_ID,
+    "api-auth-applicationkey": process.env.CIN7_APPLICATION_KEY,
+    "Content-Type":            "application/json",
+  };
+}
+
+async function fetchCin7Movements() {
+  if (!process.env.CIN7_ACCOUNT_ID || !process.env.CIN7_APPLICATION_KEY) {
+    throw new Error("CIN7_ACCOUNT_ID or CIN7_APPLICATION_KEY environment variable not set");
+  }
+  const end   = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - CIN7_SYNC_DAYS);
+  const startDate = start.toISOString().slice(0, 10);
+  const endDate   = end.toISOString().slice(0, 10);
+
+  const all = [];
+  let page  = 1;
+  const limit = 1000;
+
+  while (true) {
+    const url = `${C7.base}${C7.path}?Page=${page}&Limit=${limit}&StartDate=${startDate}&EndDate=${endDate}`;
+    const resp = await fetch(url, { headers: cin7Headers() });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      throw new Error(`Cin7 API ${resp.status} ${resp.statusText}: ${body.slice(0, 300)}`);
+    }
+    const data  = await resp.json();
+    const batch = data[C7.arrKey] || [];
+    all.push(...batch);
+    // Stop when we get fewer records than the page size
+    if (batch.length < limit) break;
+    page++;
+  }
+  return { movements: all, startDate, endDate };
+}
+
+function buildInventoryFromCin7(movements) {
+  const skuMap   = new Map();
+  const catAgg   = {};
+  const rtAgg    = {};
+  const moMap    = new Map();
+  const monthSet = new Set();
+
+  for (const m of movements) {
+    const sku  = m[C7.sku]  || m.Sku  || m.sku  || "";  if (!sku)  continue;
+    const date = String(m[C7.date] || "").slice(0, 10);
+    const month = date.slice(0, 7);                        if (!month) continue;
+
+    const prod = m[C7.name]      || "";
+    const cat  = m[C7.category]  || "";
+    const unit = m[C7.unit]      || "kg";
+    const rt   = m[C7.reason]    || "";
+    const ref  = m[C7.reference] || "";
+    const inb  = parseFloat(m[C7.qtyIn]  || 0) || 0;
+    const outb = parseFloat(m[C7.qtyOut] || 0) || 0;
+
+    monthSet.add(month);
+
+    if (!skuMap.has(sku)) {
+      skuMap.set(sku, { s: sku, p: prod, c: cat, u: unit, m: {}, rt: {}, ti: 0, to: 0, net: 0, bc: 0 });
+    }
+    const entry = skuMap.get(sku);
+    if (!entry.m[month]) entry.m[month] = { i: 0, o: 0 };
+    entry.m[month].i += inb;
+    entry.m[month].o += outb;
+    entry.ti  += inb;
+    entry.to  += outb;
+    entry.net += inb - outb;
+
+    if (rt) {
+      if (!entry.rt[rt])       entry.rt[rt] = { i: 0, o: 0 };
+      entry.rt[rt].i += inb;  entry.rt[rt].o += outb;
+    }
+    if (!catAgg[cat])        catAgg[cat] = {};
+    if (!catAgg[cat][month]) catAgg[cat][month] = { i: 0, o: 0 };
+    catAgg[cat][month].i += inb; catAgg[cat][month].o += outb;
+
+    if (!rtAgg[rt])        rtAgg[rt] = {};
+    if (!rtAgg[rt][month]) rtAgg[rt][month] = { i: 0, o: 0 };
+    rtAgg[rt][month].i += inb; rtAgg[rt][month].o += outb;
+
+    // Track per-MO movements
+    const moMatch = ref.match(/MO-\d+/);
+    if (moMatch) {
+      const moId = moMatch[0];
+      if (!moMap.has(moId)) moMap.set(moId, { mo: moId, sku, prod, totalIn: 0, totalOut: 0 });
+      moMap.get(moId).totalIn  += inb;
+      moMap.get(moId).totalOut += outb;
+    }
+  }
+
+  return {
+    invSku:      [...skuMap.values()],
+    invCat:      catAgg,
+    invRt:       rtAgg,
+    months:      [...monthSet].sort(),
+    moMovements: Object.fromEntries(moMap),
+  };
+}
+
+async function performCin7Sync() {
+  const { movements, startDate, endDate } = await fetchCin7Movements();
+  const data = buildInventoryFromCin7(movements);
+  writeData("inventory", data);
+  const status = {
+    ok:            true,
+    lastSync:      new Date().toISOString(),
+    source:        "cin7",
+    movementCount: movements.length,
+    skuCount:      data.invSku.length,
+    moCount:       Object.keys(data.moMovements).length,
+    startDate,
+    endDate,
+  };
+  writeData("vf_sync_status", status);
+  return status;
+}
+
+// POST /api/sync-cin7 — manual on-demand sync
+app.post("/api/sync-cin7", async (req, res) => {
+  try {
+    const status = await performCin7Sync();
+    res.json(status);
+  } catch (e) {
+    console.error("[Cin7] Sync error:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/sync-cin7/status — last sync metadata
+app.get("/api/sync-cin7/status", (req, res) => {
+  const status = readData("vf_sync_status") || { ok: false, lastSync: null };
+  res.json(status);
+});
+
+// GET /api/sync-cin7/test — fetch one page raw, for verifying field names
+app.get("/api/sync-cin7/test", async (req, res) => {
+  try {
+    if (!process.env.CIN7_ACCOUNT_ID || !process.env.CIN7_APPLICATION_KEY) {
+      return res.status(503).json({ ok: false, error: "CIN7 credentials not configured" });
+    }
+    const url  = `${C7.base}${C7.path}?Page=1&Limit=3`;
+    const resp = await fetch(url, { headers: cin7Headers() });
+    const body = await resp.json().catch(() => ({}));
+    res.json({ ok: resp.ok, status: resp.status, fieldMap: C7, sample: body });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Daily cron at 6:00 AM UTC — only starts if credentials are present
+if (process.env.CIN7_ACCOUNT_ID && process.env.CIN7_APPLICATION_KEY) {
+  cron.schedule("0 6 * * *", async () => {
+    console.log("[Cin7] Daily sync starting…");
+    try {
+      const s = await performCin7Sync();
+      console.log(`[Cin7] Sync done — ${s.movementCount} movements, ${s.moCount} MOs`);
+    } catch (e) {
+      console.error("[Cin7] Daily sync failed:", e.message);
+    }
+  });
+  console.log("[Cin7] Daily sync scheduled at 06:00 UTC");
+}
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));

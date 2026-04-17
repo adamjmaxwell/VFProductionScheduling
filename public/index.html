@@ -319,7 +319,11 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
   <div id="tab-mo-status" style="display:none;">
     <div class="header">
       <h2>MO Status</h2>
-      <button class="btn btn-sm" onclick="renderMOStatus()">↺ Refresh</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span id="cin7-sync-ts" style="font-size:11px;color:var(--color-text-tertiary);"></span>
+        <button class="btn btn-sm btn-primary" id="cin7-sync-btn" onclick="triggerCin7Sync()">⟳ Sync from Cin7</button>
+        <button class="btn btn-sm" onclick="renderMOStatus()">↺ Refresh</button>
+      </div>
     </div>
     <div id="mo-status-summary" class="status-summary"></div>
     <div id="mo-status-no-inv" class="no-inv-note" style="display:none;">
@@ -833,7 +837,7 @@ function switchTab(t){
   if(t==='orders')render();
   if(t==='admin')renderUsers();
   if(t==='traceability'&&!window._traceabilityMounted){window._traceabilityMounted=true;if(window.App){ReactDOM.createRoot(document.getElementById('traceability-root')).render(React.createElement(window.App));}}
-  if(t==='mo-status'){populateMOStatusMachineFilter();renderMOStatus();}
+  if(t==='mo-status'){populateMOStatusMachineFilter();renderMOStatus();loadSyncStatus();}
 }
 function shiftCal(d){calOffset+=d*4;renderCal();}
 function resetCal(){calOffset=0;renderCal();}
@@ -1159,6 +1163,47 @@ function showImportPreview(parsed){
 
 function importToggleAll(checked){
   document.querySelectorAll('.import-row-check:not([disabled])').forEach(cb=>cb.checked=checked);
+}
+
+// ── Cin7 Sync ────────────────────────────────────────────────────────────────
+
+async function loadSyncStatus() {
+  try {
+    const s = await fetch('/api/sync-cin7/status').then(r => r.json());
+    const el = document.getElementById('cin7-sync-ts');
+    if (!el) return;
+    if (s && s.lastSync) {
+      const d = new Date(s.lastSync);
+      el.textContent = `Last synced ${d.toLocaleDateString()} ${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · ${(s.movementCount||0).toLocaleString()} movements`;
+    } else {
+      el.textContent = 'Not yet synced from Cin7';
+    }
+  } catch(e) {}
+}
+
+async function triggerCin7Sync() {
+  const btn = document.getElementById('cin7-sync-btn');
+  const ts  = document.getElementById('cin7-sync-ts');
+  btn.disabled = true;
+  btn.textContent = '⟳ Syncing…';
+  if (ts) ts.textContent = 'Syncing…';
+  try {
+    const resp = await fetch('/api/sync-cin7', { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) {
+      const d = new Date(data.lastSync);
+      if (ts) ts.textContent = `Synced ${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · ${(data.movementCount||0).toLocaleString()} movements`;
+      await renderMOStatus();
+    } else {
+      alert('Cin7 sync failed: ' + (data.error || 'Unknown error'));
+      if (ts) ts.textContent = 'Sync failed';
+    }
+  } catch(e) {
+    alert('Sync error: ' + e.message);
+    if (ts) ts.textContent = 'Sync failed';
+  }
+  btn.disabled = false;
+  btn.textContent = '⟳ Sync from Cin7';
 }
 
 // ── MO Status Tab ────────────────────────────────────────────────────────────
