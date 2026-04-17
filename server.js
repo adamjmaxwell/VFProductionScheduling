@@ -213,10 +213,12 @@ Machines (use these exact keys):
 Order statuses: queued, in-progress, complete, on-hold
 Order priorities: high, med, low
 
-IMPORTANT: Before calling any write tools (shift_machine_orders, update_order_dates, update_order_status), you MUST:
+IMPORTANT: Before calling any write tools (shift_machine_orders, update_order_dates, update_order_status, delete_order), you MUST:
 1. Use get_orders to see the current state
 2. Clearly describe to the user exactly what changes you plan to make
 3. Wait for them to explicitly confirm (e.g. "yes", "go ahead", "confirm") before executing writes
+
+For delete_order specifically: always name the order ID and SKU in your confirmation request, as deletion is permanent and cannot be undone.
 
 Dates are always in YYYY-MM-DD format.`;
 
@@ -261,6 +263,17 @@ const AI_TOOLS = [
         status: { type: "string", enum: ["queued", "in-progress", "complete", "on-hold"] },
       },
       required: ["order_id", "status"],
+    },
+  },
+  {
+    name: "delete_order",
+    description: "Permanently delete a work order from the schedule. Use only after the user has explicitly confirmed the deletion.",
+    input_schema: {
+      type: "object",
+      properties: {
+        order_id: { type: "string", description: "The orderId field of the order to delete" },
+      },
+      required: ["order_id"],
     },
   },
 ];
@@ -329,6 +342,15 @@ async function executeAITool(name, input) {
       orders[idx].status = status;
       writeData("vf_orders", orders);
       return { ok: true, message: `Order '${order_id}' status set to '${status}'` };
+    }
+
+    case "delete_order": {
+      const { order_id } = input;
+      const idx = orders.findIndex(o => o.orderId === order_id || o.id === order_id);
+      if (idx === -1) return { ok: false, error: `Order '${order_id}' not found` };
+      const deleted = orders.splice(idx, 1)[0];
+      writeData("vf_orders", orders);
+      return { ok: true, message: `Deleted order '${order_id}' (${deleted.sku || ""})` };
     }
 
     default:
