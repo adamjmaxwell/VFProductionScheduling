@@ -486,6 +486,7 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     </div>
   </div>
   <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Special instructions, MO notes..."></textarea></div>
+  <div class="field"><label>Shiaocatjam</label><input id="f-shiaocatjam" type="text" placeholder=""/></div>
   <div class="modal-actions">
     <button class="btn" onclick="closeModal()">Cancel</button>
     <button class="btn btn-primary" onclick="saveOrder()">Save order</button>
@@ -931,7 +932,7 @@ function openModal(prefill,mk,ds){
   if(!canEditOrders()){alert('You do not have permission to create or edit orders.');return;}
   editingId=null;
   document.getElementById('mtitle').textContent='New work order';
-  ['f-oid','f-due','f-start','f-end','f-qty','f-notes','f-sku'].forEach(id=>{document.getElementById(id).value='';});
+  ['f-oid','f-due','f-start','f-end','f-qty','f-notes','f-sku','f-shiaocatjam'].forEach(id=>{document.getElementById(id).value='';});
   document.getElementById('f-cat').value='';
   document.getElementById('f-sub').innerHTML='<option value="">— select category first —</option>';
   document.getElementById('f-region').value='';document.getElementById('f-temper').value='';
@@ -960,6 +961,7 @@ function openModal(prefill,mk,ds){
     document.getElementById('f-status').value=prefill.status||'queued';
     document.getElementById('f-priority').value=prefill.priority||'low';
     document.getElementById('f-notes').value=prefill.notes||'';
+    document.getElementById('f-shiaocatjam').value=prefill.shiaocatjam||'';
     calcBOM();
   }
   document.getElementById('modal').style.display='flex';
@@ -991,7 +993,8 @@ function saveOrder(){
     qty,batches,total:qty*batches,
     status:document.getElementById('f-status').value,
     priority:document.getElementById('f-priority').value,
-    notes:document.getElementById('f-notes').value.trim()
+    notes:document.getElementById('f-notes').value.trim(),
+    shiaocatjam:document.getElementById('f-shiaocatjam').value.trim()
   };
   if(editingId){const i=orders.findIndex(x=>x.id===editingId);if(i!==-1)orders[i]=o;}
   else orders.push(o);
