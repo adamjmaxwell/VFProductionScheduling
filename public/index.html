@@ -202,6 +202,8 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
 #ai-send-btn:hover{opacity:0.85;}
 #ai-send-btn:disabled{opacity:0.4;cursor:not-allowed;}
 .ai-empty{color:var(--color-text-tertiary);font-size:12px;text-align:center;margin-top:32px;line-height:1.6;}
+.ai-quick-btn{background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary);border-radius:99px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--color-text-secondary);font-family:inherit;white-space:nowrap;}
+.ai-quick-btn:hover{background:var(--color-border-tertiary);color:var(--color-text-primary);}
 </style>
 </head>
 <body>
@@ -1408,6 +1410,9 @@ async function confirmImport(){
     <div id="ai-messages">
       <div class="ai-empty">Ask me to update the schedule.<br>e.g. "West Mac went down — shift all orders 3 days forward"</div>
     </div>
+    <div style="padding:6px 12px 0;display:flex;gap:6px;flex-wrap:wrap;">
+      <button class="ai-quick-btn" onclick="aiQuickPrompt('plan')">💡 Plan new order</button>
+    </div>
     <div class="ai-input-area">
       <textarea id="ai-input" rows="1" placeholder="Message AI assistant…" onkeydown="aiInputKeydown(event)" oninput="aiInputResize(this)"></textarea>
       <button id="ai-send-btn" onclick="sendAIMessage()">Send</button>
@@ -1488,6 +1493,15 @@ function escapeHtml(s) {
 
 // Display history (role + text only) stored separately for rendering
 let aiDisplayHistory = [];
+
+function aiQuickPrompt(type) {
+  const input = document.getElementById('ai-input');
+  if (type === 'plan') {
+    input.value = "I have a new production need and want a scheduling recommendation. Can you help me find the best available slot?";
+  }
+  aiInputResize(input);
+  input.focus();
+}
 
 async function sendAIMessage() {
   if (aiLoading) return;

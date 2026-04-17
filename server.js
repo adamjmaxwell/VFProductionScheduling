@@ -210,8 +210,26 @@ Machines (use these exact keys):
 - Zone 1 Mcintyres: east_mac (East Mac CBS), west_mac (West Mac CBE), mac_1250 (1250 Mac), mac_packout (Mac Packout), pouching (Pouching)
 - Zone 2 Chocolate: fat_melter (Fat Melter), refining (Refining), conching (Conching), depositing (Depositing)
 
+Capacity & runtime constraints (apply these when recommending slots):
+- east_mac / west_mac (Mcintyres): Runtime 12 days. Min 2,250 kg / Max 4,300 kg per batch. EU and US products cannot be mixed on the same run.
+- refining: Runtime 1 day. Max capacity 6,000 kg/day (4 batches × 1,500 kg). Min 500 kg per batch.
+- conching: Runtime 1 day. Min 3,000 kg / Max 6,000 kg per run.
+- roaster: ~325 kg per batch, up to ~4 batches/shift (~1,300 kg/day).
+- fat_melter: 24 hr melt cycle. Runs simultaneously with liquor melting.
+- Liquor melting (pre-conching): 72 hr.
+- Finished chocolate pipeline: roasting → fat melting (24 hr, parallel with liquor melting 72 hr) → refining (1 day) → conching (1 day) → depositing.
+- Liquor pipeline: roasting → fat melting (24 hr) → Mcintyre (12 days) → packout.
+
 Order statuses: queued, in-progress, complete, on-hold
 Order priorities: high, med, low
+
+When recommending a production slot:
+1. Call get_orders to see what's currently scheduled.
+2. Call find_available_slots for the relevant machine(s) to identify open windows.
+3. Check that the requested quantity fits within machine capacity constraints above.
+4. If the product requires multiple machines (e.g. finished chocolate), find slots across the full pipeline.
+5. Present 2–3 concrete options (with start/end dates) and explain the trade-offs.
+6. Do NOT book anything — only recommend. The user must ask you to create or update an order to make it happen.
 
 IMPORTANT: Before calling any write tools (shift_machine_orders, update_order_dates, update_order_status, update_order_quantity, delete_order), you MUST:
 1. Use get_orders to see the current state
@@ -266,6 +284,21 @@ const AI_TOOLS = [
     },
   },
   {
+    name: "find_available_slots",
+    description: "Scan the current schedule for available gaps on a machine that could fit a new production order. Returns concrete date windows. Always call this before recommending a slot to the user.",
+    input_schema: {
+      type: "object",
+      properties: {
+        machine:        { type: "string",  description: "Machine key to check" },
+        duration_days:  { type: "number",  description: "How many calendar days the order needs" },
+        qty:            { type: "number",  description: "Quantity in kg (used to validate against capacity)" },
+        earliest_start: { type: "string",  description: "Don't suggest slots before this date (YYYY-MM-DD). Defaults to today." },
+        count:          { type: "number",  description: "How many slot options to return (default 3)" },
+      },
+      required: ["machine", "duration_days"],
+    },
+  },
+  {
     name: "update_order_quantity",
     description: "Update the batch quantity (kg) of a specific work order. Also recalculates the total.",
     input_schema: {
@@ -290,6 +323,18 @@ const AI_TOOLS = [
     },
   },
 ];
+
+function addDays(dateStr, days) {
+  if (!dateStr) return dateStr;
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysBetween(a, b) {
+  const msPerDay = 86400000;
+  return Math.floor((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / msPerDay);
+}
 
 function shiftDate(dateStr, days) {
   if (!dateStr) return dateStr;
@@ -355,6 +400,71 @@ async function executeAITool(name, input) {
       orders[idx].status = status;
       writeData("vf_orders", orders);
       return { ok: true, message: `Order '${order_id}' status set to '${status}'` };
+    }
+
+    case "find_available_slots": {
+      const { machine, duration_days, qty, earliest_start, count = 3 } = input;
+      const today = new Date().toISOString().slice(0, 10);
+      const from  = earliest_start || today;
+
+      // Active orders on this machine that overlap or start after `from`, sorted by start
+      const active = orders
+        .filter(o => o.machine === machine && o.status !== "complete" && o.start && (o.end || o.start) >= from)
+        .sort((a, b) => a.start.localeCompare(b.start));
+
+      const slots = [];
+
+      // Walk through the timeline looking for gaps
+      let cursor = from;
+      for (const order of active) {
+        const orderStart = order.start;
+        const orderEnd   = addDays(order.end || order.start, 1); // day after order ends
+
+        if (orderStart > cursor) {
+          const gap = daysBetween(cursor, orderStart);
+          if (gap >= duration_days) {
+            const slotEnd = addDays(cursor, duration_days);
+            slots.push({
+              start:      cursor,
+              end:        slotEnd,
+              gap_days:   gap,
+              fits:       true,
+              note:       slots.length === 0 ? "Earliest available gap" : "Gap in schedule",
+            });
+            if (slots.length >= count) break;
+          }
+        }
+        // Advance cursor past this order
+        if (orderEnd > cursor) cursor = orderEnd;
+      }
+
+      // Fill remaining options after the last scheduled order
+      while (slots.length < count) {
+        slots.push({
+          start:    cursor,
+          end:      addDays(cursor, duration_days),
+          gap_days: null,
+          fits:     true,
+          note:     "After end of current schedule",
+        });
+        cursor = addDays(cursor, duration_days + 1);
+      }
+
+      // Capacity sanity check
+      const capacityWarnings = [];
+      if ((machine === "east_mac" || machine === "west_mac") && qty) {
+        if (qty < 2250) capacityWarnings.push(`Qty ${qty} kg is below minimum 2,250 kg for Mcintyres`);
+        if (qty > 4300) capacityWarnings.push(`Qty ${qty} kg exceeds maximum 4,300 kg for Mcintyres`);
+      }
+      if (machine === "refining" && qty) {
+        if (qty > 6000) capacityWarnings.push(`Qty ${qty} kg exceeds daily max 6,000 kg for Refining`);
+      }
+      if (machine === "conching" && qty) {
+        if (qty < 3000) capacityWarnings.push(`Qty ${qty} kg is below minimum 3,000 kg for Conching`);
+        if (qty > 6000) capacityWarnings.push(`Qty ${qty} kg exceeds maximum 6,000 kg for Conching`);
+      }
+
+      return { machine, duration_days, qty: qty || null, slots, capacityWarnings };
     }
 
     case "update_order_quantity": {
