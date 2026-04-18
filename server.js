@@ -614,13 +614,20 @@ function cin7Headers() {
   };
 }
 
-async function fetchCin7Movements() {
+async function fetchCin7Movements(days) {
   if (!process.env.CIN7_ACCOUNT_ID || !process.env.CIN7_APPLICATION_KEY) {
     throw new Error("CIN7_ACCOUNT_ID or CIN7_APPLICATION_KEY environment variable not set");
   }
-  const end   = new Date();
-  const start = new Date();
-  start.setDate(start.getDate() - CIN7_SYNC_DAYS);
+  const windowDays = days ?? CIN7_SYNC_DAYS;
+  const end = new Date();
+  let start = new Date();
+  start.setDate(start.getDate() - windowDays);
+  // Snap start to the 1st of its month when the caller requested a short window,
+  // so the per-month merge in performCin7Sync doesn't replace a month bucket with
+  // a partial fetch and drop earlier days.
+  if (days != null) {
+    start = new Date(start.getFullYear(), start.getMonth(), 1);
+  }
   const startDate = start.toISOString().slice(0, 10);
   const endDate   = end.toISOString().slice(0, 10);
 
@@ -709,8 +716,8 @@ function buildInventoryFromCin7(movements) {
   };
 }
 
-async function performCin7Sync() {
-  const { movements, startDate, endDate } = await fetchCin7Movements();
+async function performCin7Sync(days) {
+  const { movements, startDate, endDate } = await fetchCin7Movements(days);
   const fresh    = buildInventoryFromCin7(movements);
   const existing = readData("inventory");
 
@@ -806,7 +813,7 @@ async function performCin7Sync() {
 // POST /api/sync-cin7 — manual on-demand sync
 app.post("/api/sync-cin7", async (req, res) => {
   try {
-    const status = await performCin7Sync();
+    const status = await performCin7Sync(15);
     res.json(status);
   } catch (e) {
     console.error("[Cin7] Sync error:", e.message);
