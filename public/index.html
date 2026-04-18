@@ -192,11 +192,16 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
 .ai-msg.user{align-self:flex-end;background:#ff6600;color:#fff;border-radius:2px 2px 0 2px;padding:8px 12px;}
 .ai-msg.assistant{align-self:flex-start;background:var(--color-background-secondary);color:var(--color-text-primary);border-radius:2px 2px 2px 0;padding:8px 12px;white-space:pre-wrap;border-left:2px solid #ff6600;}
 .ai-msg.error{align-self:flex-start;background:#2a0808;color:#e04040;border-radius:2px;padding:8px 12px;}
-.ai-typing{align-self:flex-start;display:flex;gap:4px;padding:10px 12px;background:var(--color-background-secondary);border-radius:2px;}
+.ai-typing{align-self:flex-start;display:flex;gap:10px;align-items:center;padding:10px 14px;background:var(--color-background-secondary);border-radius:2px;border-left:2px solid #ff6600;min-width:200px;}
+.ai-typing-dots{display:flex;gap:4px;flex-shrink:0;}
 .ai-typing span{width:6px;height:6px;border-radius:50%;background:#ff6600;animation:ai-bounce 1.2s infinite ease-in-out;}
 .ai-typing span:nth-child(2){animation-delay:0.2s;}
 .ai-typing span:nth-child(3){animation-delay:0.4s;}
+.ai-typing-label{font-size:11px;color:#ff6600;letter-spacing:0.04em;animation:ai-label-fade 0.4s ease-in;}
 @keyframes ai-bounce{0%,80%,100%{transform:translateY(0);}40%{transform:translateY(-6px);}}
+@keyframes ai-label-fade{from{opacity:0;transform:translateX(-4px);}to{opacity:1;transform:translateX(0);}}
+#ai-fab.loading{animation:ai-fab-pulse 1.4s infinite ease-in-out;}
+@keyframes ai-fab-pulse{0%,100%{box-shadow:0 4px 20px rgba(255,102,0,0.45);}50%{box-shadow:0 0 0 8px rgba(255,102,0,0.15),0 4px 28px rgba(255,102,0,0.7);}}
 .ai-input-area{border-top:1px solid var(--color-border-tertiary);padding:10px 12px;display:flex;gap:8px;align-items:flex-end;flex-shrink:0;background:var(--color-background-secondary);}
 #ai-input{flex:1;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md,2px);padding:6px 10px;font-size:12px;font-family:inherit;resize:none;max-height:100px;overflow-y:auto;color:var(--color-text-primary);background:var(--color-background-primary);}
 #ai-input:focus{outline:none;border-color:#ff6600;}
@@ -1470,19 +1475,44 @@ function renderAIMessages(displayHistory) {
   container.scrollTop = container.scrollHeight;
 }
 
+const AI_THINKING_MSGS = [
+  'Thinking…',
+  'Checking schedule…',
+  'Analyzing capacity…',
+  'Reviewing work orders…',
+  'Running the numbers…',
+  'Querying data…',
+  'Almost there…',
+];
+let aiTypingInterval = null;
+
 function addTypingIndicator() {
   const container = document.getElementById('ai-messages');
   const el = document.createElement('div');
   el.className = 'ai-typing';
   el.id = 'ai-typing';
-  el.innerHTML = '<span></span><span></span><span></span>';
+  el.innerHTML = '<div class="ai-typing-dots"><span></span><span></span><span></span></div><span class="ai-typing-label" id="ai-thinking-label">Thinking…</span>';
   container.appendChild(el);
   container.scrollTop = container.scrollHeight;
+  document.getElementById('ai-fab').classList.add('loading');
+  let msgIdx = 0;
+  aiTypingInterval = setInterval(() => {
+    msgIdx = (msgIdx + 1) % AI_THINKING_MSGS.length;
+    const label = document.getElementById('ai-thinking-label');
+    if (label) {
+      label.style.animation = 'none';
+      label.offsetHeight; // force reflow to restart animation
+      label.style.animation = '';
+      label.textContent = AI_THINKING_MSGS[msgIdx];
+    }
+  }, 2500);
 }
 
 function removeTypingIndicator() {
   const el = document.getElementById('ai-typing');
   if (el) el.remove();
+  if (aiTypingInterval) { clearInterval(aiTypingInterval); aiTypingInterval = null; }
+  document.getElementById('ai-fab').classList.remove('loading');
 }
 
 function escapeHtml(s) {
