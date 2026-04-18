@@ -638,11 +638,17 @@ async function fetchCin7Movements(days) {
   while (true) {
     const url = `${C7.base}${C7.path}?Page=${page}&Limit=${limit}&StartDate=${startDate}&EndDate=${endDate}`;
     const resp = await fetch(url, { headers: cin7Headers() });
+    const ct   = resp.headers.get("content-type") || "";
+    const text = await resp.text().catch(() => "");
     if (!resp.ok) {
-      const body = await resp.text().catch(() => "");
-      throw new Error(`Cin7 API ${resp.status} ${resp.statusText}: ${body.slice(0, 300)}`);
+      throw new Error(`Cin7 API ${resp.status} ${resp.statusText} [${ct}]: ${text.slice(0, 300)}`);
     }
-    const data  = await resp.json();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (_) {
+      throw new Error(`Cin7 API ${resp.status} returned non-JSON [${ct}]: ${text.slice(0, 300)}`);
+    }
     const batch = data[C7.arrKey] || [];
     all.push(...batch);
     // Stop when we get fewer records than the page size
@@ -835,8 +841,17 @@ app.get("/api/sync-cin7/test", async (req, res) => {
     }
     const url  = `${C7.base}${C7.path}?Page=1&Limit=3`;
     const resp = await fetch(url, { headers: cin7Headers() });
-    const body = await resp.json().catch(() => ({}));
-    res.json({ ok: resp.ok, status: resp.status, fieldMap: C7, sample: body });
+    const ct   = resp.headers.get("content-type") || "";
+    const text = await resp.text().catch(() => "");
+    let sample;
+    let parseError = null;
+    try {
+      sample = JSON.parse(text);
+    } catch (e) {
+      parseError = e.message;
+      sample = text.slice(0, 500);
+    }
+    res.json({ ok: resp.ok, status: resp.status, contentType: ct, fieldMap: C7, sample, parseError });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
