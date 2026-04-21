@@ -209,6 +209,27 @@ body {
 .mo-grind { background: var(--vf-cat-teal-soft);   border-left-color: var(--vf-cat-teal-base);   color: var(--vf-cat-teal-strong); }
 .mo-empty { color: var(--vf-text-muted); font-size: var(--vf-text-xs); padding: var(--vf-space-1); text-align: center; }
 
+/* Completed MOs — faded out with a checkmark prefix and a strikethrough on
+   the SKU line. Keeps the category color visible so you still know what
+   was produced, but clearly marks the order as done. */
+.mo-block--complete { opacity: 0.55; background: var(--vf-surface-sunken); border-left-style: solid; }
+.mo-block--complete .mo-id { color: var(--vf-success-text); }
+.mo-block--complete .mo-sku { text-decoration: line-through; }
+.mo-block--complete:hover { opacity: 0.85; }
+.mo-done-mark {
+  display: inline-block;
+  width: 12px; height: 12px;
+  line-height: 12px;
+  text-align: center;
+  background: var(--vf-success-base);
+  color: var(--vf-text-inverse);
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: var(--vf-weight-semibold);
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
 /* ── Cards (Work Orders accordions) ──────────────────────────────────────── */
 
 .card {
@@ -837,7 +858,7 @@ table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
     </div>
     <div class="zone-header">Zone 2 — Chocolate making</div>
     <div class="machine-grid">
-      <div class="machine-card"><div class="machine-name">Fat melter</div><div class="machine-detail"><strong>24 hr</strong> · Simultaneous with liquor melting for chocolate</div></div>
+      <div class="machine-card"><div class="machine-name">Fat melter</div><div class="machine-detail">CBS-based chocolate fat: <strong>72 hr</strong> · CBE-based chocolate fat: <strong>24 hr</strong> · Simultaneous with liquor melting</div></div>
       <div class="machine-card"><div class="machine-name">Mass line: Refining</div><div class="machine-detail">Min: <strong>500 kg</strong> / Max: <strong>1,500 kg</strong> per batch · Runtime: <strong>1 day</strong> · Max capacity: <strong>6,000 kg/day</strong> (4 × 1,500 kg batches)</div></div>
       <div class="machine-card"><div class="machine-name">Mass line: Conching</div><div class="machine-detail">Min: <strong>3,000 kg</strong> / Max: <strong>6,000 kg</strong> · Liquor melting 72 hr · Runtime: <strong>1 day</strong></div></div>
       <div class="machine-card"><div class="machine-name">Drops line: Pack out</div><div class="machine-detail">50 lb BIB, 25 kg BIB · Finished chocolate</div></div>
@@ -1049,8 +1070,9 @@ table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
     </div>
   </div>
   <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Special instructions, MO notes..."></textarea></div>
-  <div class="field"><label>Shiaocatjam</label><input id="f-shiaocatjam" type="text" placeholder=""/></div>
   <div class="modal-actions">
+    <button class="btn btn-danger" id="f-delete-btn" onclick="deleteCurrent()" style="margin-right:auto;display:none;">Delete</button>
+    <button class="btn" id="f-toggle-complete-btn" onclick="toggleComplete()" style="display:none;"></button>
     <button class="btn" onclick="closeModal()">Cancel</button>
     <button class="btn btn-primary" onclick="saveOrder()">Save order</button>
   </div>
@@ -1386,6 +1408,8 @@ async function init(){
   if(!(await tryResumeSession())){
     document.getElementById('login-screen').style.display='flex';
   }
+  // Compute which MOs are inventory-derived complete (best-effort, after orders are loaded)
+  await loadInventoryCompletion();
 }
 
 async function persist(){
@@ -1412,6 +1436,46 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function getMon(d){const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);const m=new Date(d);m.setDate(diff);m.setHours(0,0,0,0);return m;}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// Cache of MOs that the inventory-movement upload says are complete (≥85% of
+// planned qty produced). Refreshed by loadInventoryCompletion() when the page
+// loads and after a Cin7 sync. Never written to — purely derived from the
+// inventory data the user uploaded on the Traceability tab.
+let inventoryCompletedMOs = new Set();
+
+async function loadInventoryCompletion(){
+  try{
+    const r = await fetch('/api/data/inventory');
+    if(!r.ok) return;
+    const j = await r.json();
+    const moMovements = (j && j.exists && j.value && j.value.moMovements) ? j.value.moMovements : {};
+    const next = new Set();
+    // Walk every order to compute pct against its planned qty
+    (orders||[]).forEach(o=>{
+      const moMatch = (o.orderId||'').match(/MO-\d+/);
+      const moId = moMatch ? moMatch[0] : null;
+      if(!moId) return;
+      const inv = moMovements[moId];
+      if(!inv) return;
+      const planned = o.qty || 0;
+      const actual  = inv.totalIn || 0;
+      // Treat as complete if planned was 0 but we made some, or pct ≥ 85
+      if((planned === 0 && actual > 0) || (planned > 0 && actual / planned >= 0.85)){
+        next.add(moId);
+      }
+    });
+    inventoryCompletedMOs = next;
+  }catch(e){/* silent — calendar still works without inventory data */}
+}
+
+// True if this order should be shown as complete on the calendar — either
+// the user manually marked it complete, or the inventory upload's MO-level
+// totals indicate the planned qty was hit.
+function isOrderComplete(o){
+  if(o && o.status === 'complete') return true;
+  const moMatch = (o && o.orderId || '').match(/MO-\d+/);
+  return !!(moMatch && inventoryCompletedMOs.has(moMatch[0]));
+}
+
 // Category color mapping for calendar MO blocks (Voyage design system).
 // Per DESIGN.txt: category colors are for product/operation type only — never status.
 //   blue   = CBE liquor   (505.EU CBE Liquor and related WIP/FG)
@@ -1479,8 +1543,11 @@ function renderCal(){
         html+=`<td class="cal-cell${isToday?' today-col':''}${isMon?' week-sep':''}" onclick="calClick('${m.key}','${ds}')">`;
         if(active.length){
           active.forEach(o=>{
-            html+=`<div class="mo-block ${chipClass(o)}" title="${esc((o.sku||'')+'\n'+(o.notes||''))}" onclick="event.stopPropagation();editById('${esc(o.id)}')">
-              <div class="mo-id">${esc(o.orderId)||'—'}</div>
+            const done=isOrderComplete(o);
+            const doneAttr=done?' data-complete="1"':'';
+            const doneMark=done?'<span class="mo-done-mark" aria-label="Completed">✓</span> ':'';
+            html+=`<div class="mo-block ${chipClass(o)}${done?' mo-block--complete':''}"${doneAttr} title="${esc((o.sku||'')+'\n'+(o.notes||''))+(done?'\nCompleted':'')}" onclick="event.stopPropagation();editById('${esc(o.id)}')">
+              <div class="mo-id">${doneMark}${esc(o.orderId)||'—'}</div>
               ${o.sku?`<div class="mo-sku">${esc(shortSku(o.sku))}</div>`:''}
               ${o.total?`<div class="mo-qty">${o.total.toLocaleString()} kg</div>`:''}
             </div>`;
@@ -1538,7 +1605,7 @@ function openModal(prefill,mk,ds){
   if(!canEditOrders()){alert('You do not have permission to create or edit orders.');return;}
   editingId=null;
   document.getElementById('mtitle').textContent='New work order';
-  ['f-oid','f-due','f-start','f-end','f-qty','f-notes','f-sku','f-shiaocatjam'].forEach(id=>{document.getElementById(id).value='';});
+  ['f-oid','f-due','f-start','f-end','f-qty','f-notes','f-sku'].forEach(id=>{document.getElementById(id).value='';});
   document.getElementById('f-cat').value='';
   document.getElementById('f-sub').innerHTML='<option value="">— select category first —</option>';
   document.getElementById('f-region').value='';document.getElementById('f-temper').value='';
@@ -1567,10 +1634,35 @@ function openModal(prefill,mk,ds){
     document.getElementById('f-status').value=prefill.status||'queued';
     document.getElementById('f-priority').value=prefill.priority||'low';
     document.getElementById('f-notes').value=prefill.notes||'';
-    document.getElementById('f-shiaocatjam').value=prefill.shiaocatjam||'';
     calcBOM();
   }
+  // Show/hide the complete + delete actions depending on whether we're editing an existing order
+  const completeBtn=document.getElementById('f-toggle-complete-btn');
+  const deleteBtn=document.getElementById('f-delete-btn');
+  if(prefill&&prefill.id){
+    const isComplete=(prefill.status==='complete');
+    completeBtn.style.display='inline-flex';
+    completeBtn.textContent=isComplete?'↺ Reopen':'✓ Mark complete';
+    completeBtn.classList.toggle('btn-primary',!isComplete);
+    deleteBtn.style.display='inline-flex';
+  }else{
+    completeBtn.style.display='none';
+    deleteBtn.style.display='none';
+  }
   document.getElementById('modal').style.display='flex';
+}
+function toggleComplete(){
+  if(!editingId)return;
+  if(!canEditOrders()){alert('You do not have permission to edit orders.');return;}
+  const cur=document.getElementById('f-status').value;
+  document.getElementById('f-status').value=(cur==='complete')?'in-progress':'complete';
+  // Save immediately so the change persists without requiring "Save order"
+  saveOrder();
+}
+function deleteCurrent(){
+  if(!editingId)return;
+  deleteOrder(editingId);
+  closeModal();
 }
 function closeModal(){document.getElementById('modal').style.display='none';}
 function closeOut(e){if(e.target===e.currentTarget)closeModal();}
@@ -1599,8 +1691,7 @@ function saveOrder(){
     qty,batches,total:qty*batches,
     status:document.getElementById('f-status').value,
     priority:document.getElementById('f-priority').value,
-    notes:document.getElementById('f-notes').value.trim(),
-    shiaocatjam:document.getElementById('f-shiaocatjam').value.trim()
+    notes:document.getElementById('f-notes').value.trim()
   };
   if(editingId){const i=orders.findIndex(x=>x.id===editingId);if(i!==-1)orders[i]=o;}
   else orders.push(o);
@@ -1991,7 +2082,9 @@ async function confirmImport(){
     }
   });
 
-  await persist();render();renderCal();
+  await persist();
+  await loadInventoryCompletion(); // re-derive completed-MO set against newly-imported orders
+  render();renderCal();
   closeImportModal();
 
   const n=document.getElementById('notice');
