@@ -944,15 +944,17 @@ async function performCin7Sync(days) {
   return status;
 }
 
-// POST /api/sync-cin7 — manual on-demand sync
+// POST /api/sync-cin7 — DISABLED. Cin7 deprecated /inventorymovements (2026)
+// without a v2 replacement that exposes production-receipt data, so the API
+// path can't reconstruct what we need. Inventory data is now loaded by
+// uploading the daily Cin7 "Inventory Movement Details" report (CSV/XLSX)
+// via the Traceability tab. Re-enable this if Cin7 ships a working endpoint.
 app.post("/api/sync-cin7", async (req, res) => {
-  try {
-    const status = await performCin7Sync(15);
-    res.json(status);
-  } catch (e) {
-    console.error("[Cin7] Sync error:", e.message);
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  res.status(503).json({
+    ok: false,
+    disabled: true,
+    error: "Cin7 API sync is disabled — Cin7 removed the /inventorymovements endpoint. Upload the daily Inventory Movement Details report on the Traceability tab instead.",
+  });
 });
 
 // GET /api/sync-cin7/status — last sync metadata
@@ -985,19 +987,9 @@ app.get("/api/sync-cin7/test", async (req, res) => {
   }
 });
 
-// Daily cron at 6:00 AM UTC — only starts if credentials are present
-if (process.env.CIN7_ACCOUNT_ID && process.env.CIN7_APPLICATION_KEY) {
-  cron.schedule("0 6 * * *", async () => {
-    console.log("[Cin7] Daily sync starting…");
-    try {
-      const s = await performCin7Sync();
-      console.log(`[Cin7] Sync done — ${s.movementCount} movements, ${s.moCount} MOs`);
-    } catch (e) {
-      console.error("[Cin7] Daily sync failed:", e.message);
-    }
-  });
-  console.log("[Cin7] Daily sync scheduled at 06:00 UTC");
-}
+// Daily Cin7 API cron is DISABLED — see the /api/sync-cin7 comment above.
+// Inventory updates now come from manual report uploads on the Traceability tab.
+console.log("[Cin7] API sync disabled — using manual report uploads instead.");
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));

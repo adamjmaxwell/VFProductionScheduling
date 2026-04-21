@@ -84,6 +84,11 @@ table.orders tr:hover td{background:var(--color-background-secondary);}
 .field input,.field select,.field textarea{width:100%;padding:6px 10px;font-size:12px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md,2px);background:var(--color-background-primary);color:var(--color-text-primary);font-family:inherit;}
 .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#ff6600;}
 .field textarea{resize:vertical;min-height:56px;}
+.pw-wrap{position:relative;}
+.pw-wrap input{padding-right:30px;}
+.pw-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;padding:2px 4px;color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;}
+.pw-toggle:hover{color:var(--color-text-primary);}
+.pw-toggle svg{width:14px;height:14px;display:block;}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem;}
@@ -293,7 +298,7 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     <div class="machine-grid">
       <div class="machine-card cbs"><div class="tag tag-cbs">Non-tempering · CBS</div><div class="machine-name">East Mcintyre — 5,000 kg</div><div class="machine-detail">Min: <strong>2,250 kg</strong> / Max: <strong>4,300 kg</strong> · EU/US not mixed · Runtime: <strong>12 days</strong></div></div>
       <div class="machine-card cbe"><div class="tag tag-cbe">Tempering · CBE</div><div class="machine-name">West Mcintyre — 5,000 kg</div><div class="machine-detail">Min: <strong>2,250 kg</strong> / Max: <strong>4,300 kg</strong> · EU/US not mixed · Runtime: <strong>12 days</strong></div></div>
-      <div class="machine-card" style="opacity:0.6;"><div class="machine-name">1,250 kg Mcintyre</div><div class="machine-detail">Min: <strong>600 kg</strong> / Max: <strong>1,000 kg</strong> · Not in active scope</div></div>
+      <div class="machine-card"><div class="machine-name">1,250 kg Mcintyre</div><div class="machine-detail">Min: <strong>600 kg</strong> / Max: <strong>1,000 kg</strong> · Peanut-free spread making and small-scale product tests</div></div>
       <div class="machine-card"><div class="machine-name">5k Mac Packout</div><div class="machine-detail">25 kg BIB, 225 kg drums, 1 ton totes · ~10 day cycle</div></div>
     </div>
     <div class="zone-header">Zone 2 — Chocolate making</div>
@@ -314,7 +319,7 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.9;">
       <div><strong style="color:var(--color-text-primary);">Liquor BOM:</strong> 70% roasted chocolate (DRGS) + 30% fat</div>
       <div><strong style="color:var(--color-text-primary);">Fat type:</strong> CBS = non-tempering (East Mac) · CBE = tempering (West Mac)</div>
-      <div><strong style="color:var(--color-text-primary);">EU/US:</strong> Cannot be mixed on same batch</div>
+      <div><strong style="color:var(--color-text-primary);">EU/US:</strong> Cannot be mixed on the same batch on the mass line (Refining / Conching / Depositing). Does not apply to the Mcintyres.</div>
       <div><strong style="color:var(--color-text-primary);">Roasting yield:</strong> ~68–73%. First batch post-changeover may be scrap/QA hold.</div>
     </div>
   </div>
@@ -329,8 +334,9 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     <div class="header">
       <h2>MO Status</h2>
       <div style="display:flex;align-items:center;gap:8px;">
-        <span id="cin7-sync-ts" style="font-size:11px;color:var(--color-text-tertiary);"></span>
-        <button class="btn btn-sm btn-primary" id="cin7-sync-btn" onclick="triggerCin7Sync()">⟳ Sync from Cin7</button>
+        <!-- Cin7 API sync removed — Cin7 deprecated /inventorymovements without a v2 replacement.
+             Inventory data is now loaded via the Inventory Movement Details report upload on the Traceability tab. -->
+        <span id="cin7-sync-ts" style="display:none;"></span>
         <button class="btn btn-sm" onclick="renderMOStatus()">↺ Refresh</button>
       </div>
     </div>
@@ -399,8 +405,22 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
 <div class="modal" style="width:400px;">
   <h2 id="um-title">New user</h2>
   <div class="field"><label>Username</label><input id="um-user" placeholder="Enter username"/></div>
-  <div class="field"><label>Password</label><input id="um-pass" type="password" placeholder="Enter password"/></div>
-  <div class="field"><label>Confirm password</label><input id="um-pass2" type="password" placeholder="Re-enter password"/></div>
+  <div class="field"><label>Password</label>
+    <div class="pw-wrap">
+      <input id="um-pass" type="password" placeholder="Enter password"/>
+      <button type="button" class="pw-toggle" onclick="togglePwReveal('um-pass', this)" title="Show password" aria-label="Show password">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="field"><label>Confirm password</label>
+    <div class="pw-wrap">
+      <input id="um-pass2" type="password" placeholder="Re-enter password"/>
+      <button type="button" class="pw-toggle" onclick="togglePwReveal('um-pass2', this)" title="Show password" aria-label="Show password">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+  </div>
   <div class="field"><label>Role</label>
     <select id="um-role">
       <option value="viewer">Viewer — Read-only</option>
@@ -561,6 +581,24 @@ function hashPassword(pw){
   return 'h_'+Math.abs(h).toString(36)+'_'+pw.length;
 }
 
+const PW_EYE_OPEN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const PW_EYE_OFF ='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function togglePwReveal(inputId, btn){
+  const el=document.getElementById(inputId);
+  if(!el)return;
+  if(el.type==='password'){
+    el.type='text';
+    btn.title='Hide password';
+    btn.setAttribute('aria-label','Hide password');
+    btn.innerHTML=PW_EYE_OFF;
+  }else{
+    el.type='password';
+    btn.title='Show password';
+    btn.setAttribute('aria-label','Show password');
+    btn.innerHTML=PW_EYE_OPEN;
+  }
+}
+
 async function serverGet(key){
   try{
     const r=await fetch('/api/data/'+key);
@@ -694,6 +732,13 @@ function openUserModal(userId){
   document.getElementById('um-role').value='viewer';
   document.getElementById('um-err').textContent='';
   document.getElementById('um-user').disabled=false;
+  // Reset password reveal toggles to hidden state
+  ['um-pass','um-pass2'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.type='password';
+    const btn=el&&el.parentElement.querySelector('.pw-toggle');
+    if(btn){btn.title='Show password';btn.setAttribute('aria-label','Show password');btn.innerHTML=PW_EYE_OPEN;}
+  });
   if(userId){
     const u=users.find(x=>x.id===userId);
     if(!u)return;
@@ -755,7 +800,7 @@ const PROD_LABELS={coffee_beans:'Coffee — Roast beans',coffee_ground:'Coffee �
 const ZONES=[
   {label:'Zone 1 — Seed prep & roasting',machines:[{key:'seed_clean',label:'Seed cleaning'},{key:'roaster',label:'Roaster'}]},
   {label:'Zone 1 — Mcintyres',machines:[{key:'east_mac',label:'East Mac (CBS)'},{key:'west_mac',label:'West Mac (CBE)'},{key:'mac_1250',label:'1250 Mac'},{key:'mac_packout',label:'Mac Packout'},{key:'pouching',label:'Pouching'}]},
-  {label:'Zone 2 — Chocolate',machines:[{key:'fat_melter',label:'Fat melter'},{key:'refining',label:'Refining'},{key:'conching',label:'Conching'},{key:'depositing',label:'Pack out'}]}
+  {label:'Zone 2 — Chocolate',machines:[{key:'fat_melter',label:'Fat melter'},{key:'refining',label:'Refining'},{key:'conching',label:'Conching'},{key:'depositing',label:'Chocolate packout'}]}
 ];
 const SEED=[
   {id:'a1',orderId:'MO-00722',sku:'WIP-5100042-EU · 505.EU (CBE) Liquor EU',cat:'liquor',sub:'liquor',region:'eu',temper:'cbe',machine:'west_mac',qty:4300,batches:1,total:4300,status:'in-progress',priority:'high',due:'2026-03-29',start:'2026-03-23',end:'2026-03-29',notes:'2 of 4 — West Mac (CBE) · Release 03-11'},
@@ -1084,7 +1129,7 @@ init();
 const IMPORT_MACHINE_LABELS={
   seed_clean:'Seed cleaning',roaster:'Roaster',east_mac:'East Mac (CBS)',west_mac:'West Mac (CBE)',
   mac_1250:'1250 Mac',mac_packout:'Mac Packout',fat_melter:'Fat melter',
-  refining:'Refining',conching:'Conching',depositing:'Pack out'
+  refining:'Refining',conching:'Conching',depositing:'Chocolate packout'
 };
 
 let importParsed=[];
