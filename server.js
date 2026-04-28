@@ -57,15 +57,36 @@ function parseDate(raw) {
   return null;
 }
 
+// Words that, when they immediately follow a "<number> kg" token, indicate the
+// number is a PACKAGE SIZE (bag-in-box, drum, pouch, etc.) — not the
+// production quantity. Critical: the previous parser greedily matched any
+// "X kg" and any leading number, so notes like "Packout · 25kg BIB" set the
+// order qty to 25 (the BIB size), and notes like "Grinding · 7-day cycle"
+// set it to 7 (the day count). The fix: only accept kg/MT matches that are
+// NOT followed by these package words, then take the largest.
+const PACKAGE_WORD_RE = /^\s*(BIB|drum|pouch|tote|sack|bag|box|pail|jar|case|bottle)/i;
+
 function parseQty(raw) {
   if (!raw) return 0;
   const s = String(raw).replace(/,/g, "");
-  const mt = s.match(/(\d+(?:\.\d+)?)\s*MT\b/i);
-  if (mt) return Math.round(parseFloat(mt[1]) * 1000);
-  const kg = s.match(/(\d+(?:\.\d+)?)\s*kg\b/i);
-  if (kg) return Math.round(parseFloat(kg[1]));
-  const n = s.match(/(\d+(?:\.\d+)?)/);
-  return n ? Math.round(parseFloat(n[1])) : 0;
+  const candidates = [];
+  // Match "X MT" — convert to kg
+  const mtRe = /(\d+(?:\.\d+)?)\s*MT\b/gi;
+  let m;
+  while ((m = mtRe.exec(s)) !== null) {
+    const trailing = s.slice(mtRe.lastIndex);
+    if (!PACKAGE_WORD_RE.test(trailing)) candidates.push(parseFloat(m[1]) * 1000);
+  }
+  // Match "X kg" — exclude when followed by a package word
+  const kgRe = /(\d+(?:\.\d+)?)\s*kg\b/gi;
+  while ((m = kgRe.exec(s)) !== null) {
+    const trailing = s.slice(kgRe.lastIndex);
+    if (!PACKAGE_WORD_RE.test(trailing)) candidates.push(parseFloat(m[1]));
+  }
+  if (!candidates.length) return 0;
+  // Production qty is the largest kg-tagged number on the line (e.g. 4,300 kg
+  // wins over a stray 50 kg test reference, and certainly over package sizes).
+  return Math.round(Math.max(...candidates));
 }
 
 function detectAttribs(sku, machine) {
