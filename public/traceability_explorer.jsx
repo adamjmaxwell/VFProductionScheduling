@@ -547,12 +547,21 @@ function InvUploadModal({ onClose, onUploaded }) {
 
         {parsed && hasExisting && (
           <div style={{display:"flex",gap:6,marginBottom:12}}>
-            <button onClick={()=>setMode("replace")} style={btnStyle(mode==="replace")}>Replace All</button>
+            <button onClick={()=>setMode("replace")} style={btnStyle(mode==="replace")}>Replace All <span style={{fontSize:9,opacity:0.7,marginLeft:4}}>(recommended)</span></button>
             <button onClick={()=>setMode("merge")} style={btnStyle(mode==="merge")}>Merge / Add Delta</button>
           </div>
         )}
 
         {error && <div style={{background:"#450a0a",border:"1px solid #dc2626",borderRadius:6,padding:10,fontSize:12,color:"#fca5a5",marginBottom:12}}>{error}</div>}
+
+        {parsed && hasExisting && mode==="merge" && (
+          <div style={{background:"#3a2a08",border:"1px solid #d97706",borderRadius:6,padding:10,fontSize:12,color:"#fcd34d",marginBottom:12,lineHeight:1.5}}>
+            <div style={{fontWeight:600,marginBottom:4}}>⚠ Merge mode caution</div>
+            For each SKU+month, this <strong>adds</strong> the new totals on top of any existing values for that month. Per-MO totals (the basis for the auto-complete check) are <strong>overwritten</strong> with fresh values.
+            <br/>If your previous and current reports cover overlapping date ranges, the SKU totals will be inflated. Use <strong>Replace All</strong> if your CSV represents the complete current state.
+          </div>
+        )}
+
         {parsed && (
           <div style={{background:"#1e293b",borderRadius:6,padding:12,marginBottom:12,fontSize:12}}>
             <div style={{fontWeight:600,marginBottom:6,color:"#4ade80"}}>Parsed — {fileName}</div>
@@ -560,8 +569,8 @@ function InvUploadModal({ onClose, onUploaded }) {
             <div><strong>{cats.length}</strong> categories: {cats.join(", ")}</div>
             <div style={{marginTop:6,fontSize:11,color:mode==="merge"?"#60a5fa":"#facc15"}}>
               {mode==="merge"
-                ? "New data will be added to existing inventory (totals will accumulate)."
-                : "This will replace all current inventory data."}
+                ? "Existing data is kept where the new file has no entry; SKU monthly totals add, per-MO totals overwrite."
+                : "This will replace all current inventory data with the contents of this file."}
             </div>
           </div>
         )}
