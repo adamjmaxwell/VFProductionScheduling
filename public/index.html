@@ -818,6 +818,7 @@ table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
     <button class="tab" onclick="switchTab('traceability')">Traceability</button>
     <button class="tab" onclick="switchTab('mo-status')">MO Status</button>
     <button class="tab" onclick="switchTab('live-inv')">Live Inventory</button>
+    <button class="tab" onclick="switchTab('mrp-setup')" id="tab-mrp-setup-btn" style="display:none;">MRP Setup</button>
     <button class="tab" onclick="switchTab('admin')" id="tab-admin-btn" style="display:none;">Admin console</button>
   </div>
 
@@ -989,6 +990,81 @@ table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
         <thead id="live-inv-thead"></thead>
         <tbody id="live-inv-tbody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- MRP SETUP (admin-only) — BOMs, lead times, safety stock for the MRP feature -->
+  <div id="tab-mrp-setup" style="display:none;">
+    <div class="header">
+      <h2>MRP Setup</h2>
+      <span style="font-size:var(--vf-text-sm);color:var(--vf-text-tertiary);">BOMs · Supply settings · Recursive expand</span>
+    </div>
+
+    <div class="status-summary" id="mrp-setup-kpis"></div>
+
+    <!-- Sub-section selector -->
+    <div style="display:flex;gap:var(--vf-space-2);margin-bottom:var(--vf-space-4);border-bottom:1px solid var(--vf-border-default);">
+      <button class="btn btn-sm" id="mrp-tab-boms"     onclick="switchMrpSetupSection('boms')"     style="border-radius:0;border-bottom:2px solid var(--vf-brand-orange);">BOMs</button>
+      <button class="btn btn-sm" id="mrp-tab-supply"   onclick="switchMrpSetupSection('supply')"   style="border-radius:0;background:transparent;">Supply settings</button>
+      <button class="btn btn-sm" id="mrp-tab-expand"   onclick="switchMrpSetupSection('expand')"   style="border-radius:0;background:transparent;">Test expand</button>
+    </div>
+
+    <!-- BOMs sub-view -->
+    <div id="mrp-section-boms">
+      <div class="status-filters">
+        <input id="mrp-bom-search" placeholder="Search SKU or name…" oninput="renderMrpBoms()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:220px;height:32px;">
+        <select id="mrp-bom-machine-filter" onchange="renderMrpBoms()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;height:32px;">
+          <option value="">All machines</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          <input type="checkbox" id="mrp-bom-unmapped-only" onchange="renderMrpBoms()" style="margin:0;"/>
+          Unmapped machines only
+        </label>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);max-height:600px;overflow-y:auto;">
+        <table class="status-table" id="mrp-bom-table" style="margin-top:0;">
+          <thead style="position:sticky;top:0;background:var(--vf-surface-sunken);z-index:1;">
+            <tr><th>Parent SKU</th><th>Name</th><th>Versions</th><th>Default machine</th><th>Lead (d)</th><th>Components</th><th>QtyToProduce</th></tr>
+          </thead>
+          <tbody id="mrp-bom-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Supply settings sub-view -->
+    <div id="mrp-section-supply" style="display:none;">
+      <div class="status-filters">
+        <input id="mrp-supply-search" placeholder="Search SKU or name…" oninput="renderMrpSupply()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:220px;height:32px;">
+        <select id="mrp-supply-source-filter" onchange="renderMrpSupply()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;height:32px;">
+          <option value="">All</option>
+          <option value="explicit">Explicit</option>
+          <option value="alias">Alias</option>
+          <option value="contract">Contract</option>
+          <option value="default">Default-only (would fall through)</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);max-height:600px;overflow-y:auto;">
+        <table class="status-table" id="mrp-supply-table" style="margin-top:0;">
+          <thead style="position:sticky;top:0;background:var(--vf-surface-sunken);z-index:1;">
+            <tr><th>SKU</th><th>Lead time (days)</th><th>Source</th><th>Notes</th></tr>
+          </thead>
+          <tbody id="mrp-supply-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Expand test sub-view -->
+    <div id="mrp-section-expand" style="display:none;">
+      <div class="status-filters">
+        <input id="mrp-expand-sku" placeholder="Parent SKU (e.g. FG-860-006-01-EU)" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:280px;height:32px;">
+        <input id="mrp-expand-qty" type="number" placeholder="Qty" min="1" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:120px;height:32px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          <input type="checkbox" id="mrp-expand-wastage" checked style="margin:0;"/>
+          Apply wastage %
+        </label>
+        <button class="btn btn-sm btn-primary" onclick="runMrpExpand()">Expand</button>
+      </div>
+      <div id="mrp-expand-result"></div>
     </div>
   </div>
 
@@ -1331,6 +1407,7 @@ function showApp(){
   window.currentUser=currentUser;
   const isAdmin=currentUser.role==='admin';
   document.getElementById('tab-admin-btn').style.display=isAdmin?'':'none';
+  document.getElementById('tab-mrp-setup-btn').style.display=isAdmin?'':'none';
   document.getElementById('user-badge').innerHTML=
     `<span>${currentUser.username}</span>`+
     `<span class="role-tag">${currentUser.role}</span>`+
@@ -1682,10 +1759,11 @@ function shortSku(s){
 
 function switchTab(t){
   if(t==='admin'&&(!currentUser||currentUser.role!=='admin'))return;
-  ['calendar','orders','capacity','traceability','mo-status','live-inv','admin'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
+  if(t==='mrp-setup'&&(!currentUser||currentUser.role!=='admin'))return;
+  ['calendar','orders','capacity','traceability','mo-status','live-inv','mrp-setup','admin'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
   document.querySelectorAll('.tab').forEach(el=>{
     const tabName=el.textContent.trim().toLowerCase();
-    const map={'calendar':'calendar','work orders':'orders','capacity & ops':'capacity','capacity &amp; ops':'capacity','traceability':'traceability','mo status':'mo-status','live inventory':'live-inv','admin console':'admin'};
+    const map={'calendar':'calendar','work orders':'orders','capacity & ops':'capacity','capacity &amp; ops':'capacity','traceability':'traceability','mo status':'mo-status','live inventory':'live-inv','mrp setup':'mrp-setup','admin console':'admin'};
     el.classList.toggle('active',map[tabName]===t);
   });
   if(t==='calendar')renderCal();
@@ -1694,6 +1772,7 @@ function switchTab(t){
   if(t==='traceability'&&!window._traceabilityMounted){window._traceabilityMounted=true;if(window.App){ReactDOM.createRoot(document.getElementById('traceability-root')).render(React.createElement(window.App));}}
   if(t==='mo-status'){populateMOStatusMachineFilter();renderMOStatus();loadSyncStatus();}
   if(t==='live-inv')loadLiveInventory();
+  if(t==='mrp-setup')loadMrpSetup();
 }
 function shiftCal(d){calOffset+=d*4;renderCal();}
 function resetCal(){calOffset=0;renderCal();}
@@ -2139,6 +2218,209 @@ async function triggerCin7Sync() {
   }
   btn.disabled = false;
   btn.textContent = '⟳ Sync from Cin7';
+}
+
+// ── MRP Setup Tab (admin-only) ───────────────────────────────────────────────
+//
+// Read-only viewers for the BOM and supply-settings data the server has
+// ingested. Phase 3 will layer the MRP calc on top of these.
+
+let mrpBomsData = null;
+let mrpSupplyData = null;
+let mrpSetupSection = 'boms';
+
+async function loadMrpSetup() {
+  try {
+    const [b, s] = await Promise.all([
+      fetch('/api/boms').then(r => r.json()),
+      fetch('/api/supply-settings').then(r => r.json()),
+    ]);
+    mrpBomsData = b;
+    mrpSupplyData = s;
+  } catch (e) {
+    mrpBomsData = { ok:false, parents:{}, parentCount:0 };
+    mrpSupplyData = { ok:false, perSku:{}, defaults:{} };
+  }
+  renderMrpSetupKpis();
+  populateMrpMachineFilter();
+  renderMrpBoms();
+  renderMrpSupply();
+}
+
+function renderMrpSetupKpis() {
+  const el = document.getElementById('mrp-setup-kpis');
+  if (!el) return;
+  const boms = mrpBomsData || {};
+  const supply = mrpSupplyData || {};
+  const parents = boms.parents || {};
+  const totalVersions = Object.values(parents).reduce((s, vs) => s + vs.length, 0);
+  // Count default versions where machine is null (need mapping)
+  const unmapped = Object.values(parents).reduce((s, vs) => {
+    const def = vs[0];
+    return s + (def && !def.machine ? 1 : 0);
+  }, 0);
+  const lastBom = boms.lastImport ? new Date(boms.lastImport).toLocaleDateString() : 'never';
+  const lastSupply = supply.lastImport ? new Date(supply.lastImport).toLocaleDateString() : 'never';
+  el.innerHTML = [
+    { label:'BOM parents',       val: (boms.parentCount||0).toLocaleString(), accent:'' },
+    { label:'BOM versions',      val: totalVersions.toLocaleString(),         accent:'var(--vf-info-base)' },
+    { label:'Unmapped machines', val: unmapped.toLocaleString(),              accent: unmapped > 0 ? 'var(--vf-warning-base)' : 'var(--vf-success-base)' },
+    { label:'Supply SKUs',       val: Object.keys(supply.perSku||{}).length.toLocaleString(), accent:'var(--vf-cat-purple-base)' },
+  ].map(s => `<div class="metric" style="${s.accent?'border-left:3px solid '+s.accent+';':''}"><div class="metric-label">${s.label}</div><div class="metric-value">${s.val}</div></div>`).join('') +
+  `<div style="grid-column:1/-1;font-size:11px;color:var(--vf-text-tertiary);margin-top:4px;">Last BOM import: ${lastBom} · Last supply-settings import: ${lastSupply}</div>`;
+}
+
+function switchMrpSetupSection(name) {
+  mrpSetupSection = name;
+  ['boms','supply','expand'].forEach(k => {
+    document.getElementById('mrp-section-' + k).style.display = (k === name) ? '' : 'none';
+    const btn = document.getElementById('mrp-tab-' + k);
+    if (btn) btn.style.borderBottom = (k === name) ? '2px solid var(--vf-brand-orange)' : '2px solid transparent';
+    if (btn) btn.style.background = (k === name) ? '' : 'transparent';
+  });
+}
+
+function populateMrpMachineFilter() {
+  const sel = document.getElementById('mrp-bom-machine-filter');
+  if (!sel || sel.options.length > 1) return;
+  const machines = new Set();
+  Object.values((mrpBomsData||{}).parents || {}).forEach(vs => {
+    if (vs[0] && vs[0].machine) machines.add(vs[0].machine);
+  });
+  [...machines].sort().forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = MO_STATUS_MACHINE_LABELS[m] || m;
+    sel.appendChild(opt);
+  });
+  // Add explicit "(unmapped)" option
+  const opt = document.createElement('option');
+  opt.value = '__unmapped__';
+  opt.textContent = '(unmapped)';
+  sel.appendChild(opt);
+}
+
+function renderMrpBoms() {
+  const tbody = document.getElementById('mrp-bom-tbody');
+  if (!tbody || !mrpBomsData) return;
+  const search = (document.getElementById('mrp-bom-search').value || '').toLowerCase();
+  const machineFilter = document.getElementById('mrp-bom-machine-filter').value;
+  const unmappedOnly = document.getElementById('mrp-bom-unmapped-only').checked;
+  const parents = mrpBomsData.parents || {};
+  const rows = Object.entries(parents).map(([sku, versions]) => ({ sku, versions, def: versions[0] }));
+  const filtered = rows.filter(r => {
+    if (unmappedOnly && r.def.machine) return false;
+    if (machineFilter === '__unmapped__' && r.def.machine) return false;
+    if (machineFilter && machineFilter !== '__unmapped__' && r.def.machine !== machineFilter) return false;
+    if (search) {
+      const hay = (r.sku + ' ' + (r.def.parentName||'')).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  }).sort((a, b) => a.sku.localeCompare(b.sku));
+  tbody.innerHTML = filtered.length === 0 ? `<tr><td colspan="7" class="empty">No BOMs match.</td></tr>` :
+    filtered.map(r => {
+      const versions = r.versions.length > 1 ? `${r.versions.length} (${r.versions.map(v=>v.version).join(',')})` : r.def.version;
+      const machineCell = r.def.machine
+        ? `<span class="badge badge-in-progress">${MO_STATUS_MACHINE_LABELS[r.def.machine]||r.def.machine}</span>`
+        : `<span class="badge badge-on-hold">unmapped</span>`;
+      const lead = r.def.productionLeadTime != null ? r.def.productionLeadTime + 'd' : '—';
+      return `<tr style="cursor:pointer;" onclick="toggleMrpBomDetail('${escapeHtml(r.sku)}')">
+        <td><span class="mo-id">${escapeHtml(r.sku)}</span></td>
+        <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r.def.parentName||'')}">${escapeHtml(r.def.parentName||'—')}</td>
+        <td style="text-align:center;">${versions}</td>
+        <td>${machineCell}</td>
+        <td style="text-align:right;">${lead}</td>
+        <td style="text-align:right;">${r.def.components.length}</td>
+        <td style="text-align:right;">${r.def.qtyToProduce}</td>
+      </tr>
+      <tr id="mrp-bom-detail-${escapeHtml(r.sku)}" style="display:none;background:var(--vf-surface-sunken);">
+        <td colspan="7" style="padding:var(--vf-space-3);">
+          ${r.def.components.map(c => `
+            <div style="display:flex;gap:var(--vf-space-3);align-items:center;font-size:11px;padding:2px 0;">
+              <span style="color:var(--vf-text-tertiary);min-width:60px;">op${c.op}</span>
+              <span class="mo-id" style="min-width:180px;">${escapeHtml(c.sku)}</span>
+              <span style="flex:1;color:var(--vf-text-secondary);">${escapeHtml(c.name||'')}</span>
+              <span style="font-variant-numeric:tabular-nums;color:var(--vf-text-primary);">qty=${c.qty}</span>
+              <span style="color:${c.wastagePct>0?'var(--vf-warning-text)':'var(--vf-text-tertiary)'};">+${c.wastagePct}% waste</span>
+            </div>
+          `).join('')}
+        </td>
+      </tr>`;
+    }).join('');
+}
+
+function toggleMrpBomDetail(sku) {
+  const el = document.getElementById('mrp-bom-detail-' + sku);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function renderMrpSupply() {
+  const tbody = document.getElementById('mrp-supply-tbody');
+  if (!tbody || !mrpSupplyData) return;
+  const search = (document.getElementById('mrp-supply-search').value || '').toLowerCase();
+  const sourceFilter = document.getElementById('mrp-supply-source-filter').value;
+  const perSku = mrpSupplyData.perSku || {};
+  const defaults = mrpSupplyData.defaults || {};
+  const rows = Object.entries(perSku).map(([sku, v]) => ({
+    sku, ...v,
+    source: v.isContract ? 'contract' : v.isAlias ? 'alias' : v.leadTimeDays != null ? 'explicit' : 'default',
+  }));
+  const filtered = rows.filter(r => {
+    if (sourceFilter && r.source !== sourceFilter) return false;
+    if (search && !r.sku.toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a,b) => a.sku.localeCompare(b.sku));
+  const sourceBadge = src => {
+    const map = { 'explicit':'badge-complete', 'alias':'badge-in-progress', 'contract':'badge-on-hold', 'default':'badge-queued' };
+    return `<span class="badge ${map[src]||'badge-queued'}">${src}</span>`;
+  };
+  tbody.innerHTML = filtered.length === 0 ? `<tr><td colspan="4" class="empty">No SKUs match.</td></tr>` :
+    filtered.map(r => `<tr>
+      <td><span class="mo-id">${escapeHtml(r.sku)}</span></td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;">${r.leadTimeDays != null ? r.leadTimeDays + 'd' : '—'}</td>
+      <td>${sourceBadge(r.source)}</td>
+      <td style="font-size:11px;color:var(--vf-text-tertiary);">${r.aliasOf ? 'aliased to ' + escapeHtml(r.aliasOf) : (r.raw ? '"' + escapeHtml(r.raw) + '"' : '—')}</td>
+    </tr>`).join('') +
+    `<tr><td colspan="4" style="font-size:11px;color:var(--vf-text-tertiary);padding:var(--vf-space-3);background:var(--vf-surface-sunken);">
+      Defaults applied to anything not listed: lead time ${defaults.leadTimeDays}d · safety ${defaults.safetyStockDays}d · packaging blanks ${defaults.packagingDefaultDays}d
+    </td></tr>`;
+}
+
+async function runMrpExpand() {
+  const sku = document.getElementById('mrp-expand-sku').value.trim();
+  const qty = parseFloat(document.getElementById('mrp-expand-qty').value);
+  const wastage = document.getElementById('mrp-expand-wastage').checked;
+  const out = document.getElementById('mrp-expand-result');
+  if (!sku || !isFinite(qty)) {
+    out.innerHTML = '<div class="warn" style="margin-top:8px;">Enter a parent SKU and a numeric qty.</div>';
+    return;
+  }
+  out.innerHTML = '<div style="font-size:12px;color:var(--vf-text-tertiary);margin-top:8px;">Expanding…</div>';
+  try {
+    const r = await fetch('/api/boms/expand?sku=' + encodeURIComponent(sku) + '&qty=' + qty + (wastage?'':'&wastage=0'));
+    const j = await r.json();
+    if (!j.ok) { out.innerHTML = '<div class="warn" style="margin-top:8px;">' + escapeHtml(j.error||'Expand failed') + '</div>'; return; }
+    const leaves = Object.values(j.leaves).sort((a,b) => b.qty - a.qty);
+    const settings = (mrpSupplyData||{}).perSku || {};
+    out.innerHTML = `
+      <div style="margin-top:var(--vf-space-3);">
+        <div style="font-size:var(--vf-text-sm);color:var(--vf-text-secondary);margin-bottom:var(--vf-space-2);">${leaves.length} leaf RM${leaves.length===1?'':'s'} needed for ${qty.toLocaleString()} units of ${escapeHtml(sku)} · recursion went ${j.intermediates.length} WIP level${j.intermediates.length===1?'':'s'} deep</div>
+        <table class="status-table">
+          <thead><tr><th>Leaf SKU</th><th style="text-align:right;">Qty needed</th><th>Lead time</th><th>Notes</th></tr></thead>
+          <tbody>
+            ${leaves.map(l => {
+              const ss = settings[l.sku];
+              const lead = ss && ss.leadTimeDays != null ? ss.leadTimeDays + 'd' : (ss && ss.isContract ? 'contract' : '—');
+              const note = l.isCycle ? '<span class="badge badge-high">cycle detected</span>' : '';
+              return `<tr><td><span class="mo-id">${escapeHtml(l.sku)}</span></td><td style="text-align:right;font-variant-numeric:tabular-nums;">${l.qty.toFixed(2)}</td><td>${lead}</td><td>${note}</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    out.innerHTML = '<div class="warn" style="margin-top:8px;">Network error: ' + escapeHtml(e.message) + '</div>';
+  }
 }
 
 // ── Live Inventory Tab ───────────────────────────────────────────────────────
