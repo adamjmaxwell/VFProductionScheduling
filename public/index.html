@@ -1031,8 +1031,32 @@ table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
       </div>
     </div>
 
-    <!-- Supply settings sub-view -->
+    <!-- Supply settings sub-view (editable) -->
     <div id="mrp-section-supply" style="display:none;">
+      <!-- Defaults editor -->
+      <div style="background:var(--vf-surface-sunken);border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);padding:var(--vf-space-3) var(--vf-space-4);margin-bottom:var(--vf-space-4);">
+        <div style="display:flex;align-items:center;gap:var(--vf-space-3);flex-wrap:wrap;">
+          <strong style="font-size:var(--vf-text-sm);color:var(--vf-text-primary);">Global defaults</strong>
+          <span style="font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">applied to any SKU not explicitly listed below</span>
+          <span id="mrp-supply-save-ind" style="margin-left:auto;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);"></span>
+        </div>
+        <div style="display:flex;gap:var(--vf-space-4);margin-top:var(--vf-space-2);flex-wrap:wrap;">
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Default lead time (days)
+            <input type="number" id="mrp-default-lead" min="0" onchange="saveMrpSupply()" style="width:90px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Safety stock (days of forward demand)
+            <input type="number" id="mrp-default-safety" min="0" onchange="saveMrpSupply()" style="width:90px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Packaging blanks default (days)
+            <input type="number" id="mrp-default-pack" min="0" onchange="saveMrpSupply()" style="width:90px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+        </div>
+      </div>
+
+      <!-- Filter strip + Add SKU -->
       <div class="status-filters">
         <input id="mrp-supply-search" placeholder="Search SKU or name…" oninput="renderMrpSupply()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:220px;height:32px;">
         <select id="mrp-supply-source-filter" onchange="renderMrpSupply()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;height:32px;">
@@ -1040,13 +1064,43 @@ table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
           <option value="explicit">Explicit</option>
           <option value="alias">Alias</option>
           <option value="contract">Contract</option>
-          <option value="default">Default-only (would fall through)</option>
         </select>
+        <span style="margin-left:auto;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">Click any cell to edit · changes auto-save</span>
+        <button class="btn btn-sm btn-primary" onclick="openAddSkuRow()">+ Add SKU</button>
       </div>
+
+      <!-- Inline-add row (hidden by default) -->
+      <div id="mrp-add-sku-row" style="display:none;background:var(--vf-brand-orange-soft);border:1px solid var(--vf-brand-orange);border-radius:var(--vf-radius-md);padding:var(--vf-space-3);margin-bottom:var(--vf-space-3);">
+        <div style="display:flex;gap:var(--vf-space-2);align-items:flex-end;flex-wrap:wrap;">
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            SKU
+            <input type="text" id="mrp-new-sku" placeholder="RM-xxx-00 / PK-xxx-00 / FG-FL-..." style="width:240px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Lead time (days)
+            <input type="number" id="mrp-new-lead" min="0" placeholder="30" style="width:90px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Source
+            <select id="mrp-new-source" style="padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;height:30px;">
+              <option value="explicit">Explicit lead time</option>
+              <option value="contract">Contract (no PO suggestions)</option>
+              <option value="alias">Alias (point at another SKU)</option>
+            </select>
+          </label>
+          <label id="mrp-new-alias-wrap" style="display:none;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Alias of (SKU)
+            <input type="text" id="mrp-new-alias" placeholder="RM-xxx-00" style="width:160px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <button class="btn btn-sm btn-primary" onclick="confirmAddSku()">Add</button>
+          <button class="btn btn-sm" onclick="document.getElementById('mrp-add-sku-row').style.display='none';">Cancel</button>
+        </div>
+      </div>
+
       <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);max-height:600px;overflow-y:auto;">
         <table class="status-table" id="mrp-supply-table" style="margin-top:0;">
           <thead style="position:sticky;top:0;background:var(--vf-surface-sunken);z-index:1;">
-            <tr><th>SKU</th><th>Lead time (days)</th><th>Source</th><th>Notes</th></tr>
+            <tr><th>SKU</th><th style="text-align:right;">Lead time (days)</th><th>Source</th><th>Notes</th><th></th></tr>
           </thead>
           <tbody id="mrp-supply-tbody"></tbody>
         </table>
@@ -2358,10 +2412,18 @@ function toggleMrpBomDetail(sku) {
 function renderMrpSupply() {
   const tbody = document.getElementById('mrp-supply-tbody');
   if (!tbody || !mrpSupplyData) return;
+  // Populate defaults editor (only first time / when data reloads)
+  const defaults = mrpSupplyData.defaults || {};
+  const dl = document.getElementById('mrp-default-lead');
+  const ds = document.getElementById('mrp-default-safety');
+  const dp = document.getElementById('mrp-default-pack');
+  if (dl && document.activeElement !== dl) dl.value = defaults.leadTimeDays ?? 30;
+  if (ds && document.activeElement !== ds) ds.value = defaults.safetyStockDays ?? 14;
+  if (dp && document.activeElement !== dp) dp.value = defaults.packagingDefaultDays ?? 14;
+
   const search = (document.getElementById('mrp-supply-search').value || '').toLowerCase();
   const sourceFilter = document.getElementById('mrp-supply-source-filter').value;
   const perSku = mrpSupplyData.perSku || {};
-  const defaults = mrpSupplyData.defaults || {};
   const rows = Object.entries(perSku).map(([sku, v]) => ({
     sku, ...v,
     source: v.isContract ? 'contract' : v.isAlias ? 'alias' : v.leadTimeDays != null ? 'explicit' : 'default',
@@ -2371,20 +2433,143 @@ function renderMrpSupply() {
     if (search && !r.sku.toLowerCase().includes(search)) return false;
     return true;
   }).sort((a,b) => a.sku.localeCompare(b.sku));
-  const sourceBadge = src => {
-    const map = { 'explicit':'badge-complete', 'alias':'badge-in-progress', 'contract':'badge-on-hold', 'default':'badge-queued' };
-    return `<span class="badge ${map[src]||'badge-queued'}">${src}</span>`;
+  tbody.innerHTML = filtered.length === 0 ? `<tr><td colspan="5" class="empty">No SKUs match.</td></tr>` :
+    filtered.map(r => {
+      const sku = escapeHtml(r.sku);
+      const leadDisabled = r.isContract || r.isAlias;
+      const leadValue = r.leadTimeDays != null ? r.leadTimeDays : '';
+      const sources = ['explicit','contract','alias'];
+      const sourceSelect = `<select onchange="onMrpSourceChange('${sku}', this.value)" style="padding:3px 6px;font-size:11px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+        ${sources.map(s => `<option value="${s}"${s===r.source?' selected':''}>${s}</option>`).join('')}
+      </select>`;
+      let notesCell = '';
+      if (r.isAlias) {
+        notesCell = `<span style="font-size:11px;color:var(--vf-text-tertiary);">aliased to </span>
+          <input type="text" value="${escapeHtml(r.aliasOf||'')}" onblur="onMrpAliasChange('${sku}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" style="width:140px;padding:2px 6px;font-size:11px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">`;
+      } else if (r.isContract) {
+        notesCell = `<span style="font-size:11px;color:var(--vf-warning-text);">contract — excluded from PO suggestions</span>`;
+      } else if (r.raw) {
+        notesCell = `<span style="font-size:11px;color:var(--vf-text-tertiary);">imported as "${escapeHtml(r.raw)}"</span>`;
+      } else {
+        notesCell = `<span style="font-size:11px;color:var(--vf-text-tertiary);">—</span>`;
+      }
+      return `<tr>
+        <td><span class="mo-id">${sku}</span></td>
+        <td style="text-align:right;">
+          <input type="number" min="0" value="${leadValue}" ${leadDisabled?'disabled':''} onblur="onMrpLeadChange('${sku}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" style="width:70px;padding:3px 6px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:${leadDisabled?'var(--vf-surface-sunken)':'var(--vf-surface-raised)'};color:var(--vf-text-primary);font-family:inherit;text-align:right;font-variant-numeric:tabular-nums;">
+        </td>
+        <td>${sourceSelect}</td>
+        <td>${notesCell}</td>
+        <td style="text-align:right;">
+          <button class="btn btn-sm btn-danger" onclick="deleteMrpSku('${sku}')" title="Remove this SKU (falls back to default)" style="padding:2px 8px;font-size:11px;">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+}
+
+// ── Edit handlers — each mutates mrpSupplyData and triggers a save ──────────
+
+function onMrpLeadChange(sku, value) {
+  const v = parseInt(value, 10);
+  const entry = mrpSupplyData.perSku[sku];
+  if (!entry) return;
+  entry.leadTimeDays = isFinite(v) && v >= 0 ? v : null;
+  entry.raw = ''; // clear imported raw text since user has overridden
+  saveMrpSupply();
+}
+function onMrpSourceChange(sku, source) {
+  const entry = mrpSupplyData.perSku[sku];
+  if (!entry) return;
+  entry.isContract = (source === 'contract');
+  entry.isAlias = (source === 'alias');
+  if (source !== 'alias') delete entry.aliasOf;
+  if (source === 'contract' || source === 'alias') entry.leadTimeDays = null;
+  saveMrpSupply();
+  renderMrpSupply();
+}
+function onMrpAliasChange(sku, aliasOf) {
+  const entry = mrpSupplyData.perSku[sku];
+  if (!entry) return;
+  entry.aliasOf = aliasOf.trim() || null;
+  saveMrpSupply();
+}
+function deleteMrpSku(sku) {
+  if (!confirm('Remove ' + sku + ' from the per-SKU overrides? It will fall back to the global default lead time.')) return;
+  delete mrpSupplyData.perSku[sku];
+  saveMrpSupply();
+  renderMrpSupply();
+}
+
+function openAddSkuRow() {
+  const row = document.getElementById('mrp-add-sku-row');
+  document.getElementById('mrp-new-sku').value = '';
+  document.getElementById('mrp-new-lead').value = '';
+  document.getElementById('mrp-new-source').value = 'explicit';
+  document.getElementById('mrp-new-alias').value = '';
+  document.getElementById('mrp-new-alias-wrap').style.display = 'none';
+  row.style.display = '';
+  document.getElementById('mrp-new-sku').focus();
+  // Wire the source dropdown's change handler each time (replace handler in case it was cached)
+  document.getElementById('mrp-new-source').onchange = function() {
+    document.getElementById('mrp-new-alias-wrap').style.display = (this.value === 'alias') ? '' : 'none';
   };
-  tbody.innerHTML = filtered.length === 0 ? `<tr><td colspan="4" class="empty">No SKUs match.</td></tr>` :
-    filtered.map(r => `<tr>
-      <td><span class="mo-id">${escapeHtml(r.sku)}</span></td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums;">${r.leadTimeDays != null ? r.leadTimeDays + 'd' : '—'}</td>
-      <td>${sourceBadge(r.source)}</td>
-      <td style="font-size:11px;color:var(--vf-text-tertiary);">${r.aliasOf ? 'aliased to ' + escapeHtml(r.aliasOf) : (r.raw ? '"' + escapeHtml(r.raw) + '"' : '—')}</td>
-    </tr>`).join('') +
-    `<tr><td colspan="4" style="font-size:11px;color:var(--vf-text-tertiary);padding:var(--vf-space-3);background:var(--vf-surface-sunken);">
-      Defaults applied to anything not listed: lead time ${defaults.leadTimeDays}d · safety ${defaults.safetyStockDays}d · packaging blanks ${defaults.packagingDefaultDays}d
-    </td></tr>`;
+}
+function confirmAddSku() {
+  const sku = document.getElementById('mrp-new-sku').value.trim();
+  if (!sku) { alert('SKU is required.'); return; }
+  if (mrpSupplyData.perSku[sku]) { alert(sku + ' already has a setting. Edit the existing row.'); return; }
+  const source = document.getElementById('mrp-new-source').value;
+  const lead = parseInt(document.getElementById('mrp-new-lead').value, 10);
+  const aliasOf = document.getElementById('mrp-new-alias').value.trim();
+  const entry = { isContract: source === 'contract', isAlias: source === 'alias' };
+  if (source === 'explicit') entry.leadTimeDays = isFinite(lead) ? lead : null;
+  else entry.leadTimeDays = null;
+  if (source === 'alias') {
+    if (!aliasOf) { alert('Alias target SKU is required.'); return; }
+    entry.aliasOf = aliasOf;
+  }
+  mrpSupplyData.perSku[sku] = entry;
+  saveMrpSupply();
+  document.getElementById('mrp-add-sku-row').style.display = 'none';
+  renderMrpSupply();
+}
+
+let mrpSupplySaveTimer = null;
+async function saveMrpSupply() {
+  // Collect current defaults from inputs
+  const defaults = {
+    leadTimeDays: parseInt(document.getElementById('mrp-default-lead').value, 10) || 30,
+    safetyStockDays: parseInt(document.getElementById('mrp-default-safety').value, 10) || 14,
+    packagingDefaultDays: parseInt(document.getElementById('mrp-default-pack').value, 10) || 14,
+  };
+  mrpSupplyData.defaults = defaults;
+  const ind = document.getElementById('mrp-supply-save-ind');
+  if (ind) { ind.textContent = 'Saving…'; ind.style.color = 'var(--vf-text-tertiary)'; }
+  // Debounce so rapid edits coalesce
+  clearTimeout(mrpSupplySaveTimer);
+  mrpSupplySaveTimer = setTimeout(async () => {
+    try {
+      const r = await fetch('/api/supply-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaults, perSku: mrpSupplyData.perSku }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      mrpSupplyData.lastImport = j.lastImport;
+      if (ind) {
+        ind.textContent = 'Saved ✓';
+        ind.style.color = 'var(--vf-success-text)';
+        setTimeout(() => { if (ind.textContent === 'Saved ✓') ind.textContent = ''; }, 2000);
+      }
+      renderMrpSetupKpis();
+    } catch (e) {
+      if (ind) {
+        ind.textContent = 'Save failed: ' + e.message;
+        ind.style.color = 'var(--vf-danger-text)';
+      }
+    }
+  }, 300);
 }
 
 async function runMrpExpand() {

@@ -1588,6 +1588,53 @@ app.get("/api/supply-settings", (req, res) => {
   res.json({ ok: true, ...blob });
 });
 
+// PUT /api/supply-settings — admin-only full-blob replace. The UI edits one
+// SKU at a time but each save sends the entire perSku map + defaults so the
+// server doesn't need diff logic. Body: { defaults: {...}, perSku: {...} }.
+// Validates shapes and rejects malformed input rather than letting bad data
+// poison the MRP calc downstream.
+app.put("/api/supply-settings", requireAdmin, (req, res) => {
+  try {
+    const body = req.body || {};
+    const defaults = Object.assign(
+      { leadTimeDays: 30, safetyStockDays: 14, packagingDefaultDays: 14 },
+      body.defaults || {},
+    );
+    // Coerce default values to non-negative integers
+    for (const k of ["leadTimeDays", "safetyStockDays", "packagingDefaultDays"]) {
+      const n = parseInt(defaults[k], 10);
+      if (!isFinite(n) || n < 0) return res.status(400).json({ ok: false, error: `defaults.${k} must be a non-negative integer` });
+      defaults[k] = n;
+    }
+    const inSku = body.perSku || {};
+    if (typeof inSku !== "object" || Array.isArray(inSku)) return res.status(400).json({ ok: false, error: "perSku must be an object" });
+    const cleanSku = {};
+    for (const sku of Object.keys(inSku)) {
+      if (!sku || typeof sku !== "string") continue;
+      const v = inSku[sku] || {};
+      const entry = {
+        leadTimeDays: v.leadTimeDays == null ? null : (parseInt(v.leadTimeDays, 10) || 0),
+        isContract: !!v.isContract,
+        isAlias: !!v.isAlias,
+      };
+      if (entry.isAlias && v.aliasOf) entry.aliasOf = String(v.aliasOf);
+      if (v.raw != null) entry.raw = String(v.raw);
+      // If isContract or isAlias, leadTimeDays may be null. If neither and
+      // the value is null, the SKU effectively falls back to the default.
+      cleanSku[sku] = entry;
+    }
+    const blob = {
+      lastImport: new Date().toISOString(),
+      defaults,
+      perSku: cleanSku,
+    };
+    writeData("vf_supply_settings", blob);
+    res.json({ ok: true, lastImport: blob.lastImport, skuCount: Object.keys(cleanSku).length });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Nightly on-hand sync at 06:30 UTC (just after the manual movement-upload window)
 if (process.env.CIN7_ACCOUNT_ID && process.env.CIN7_APPLICATION_KEY) {
   cron.schedule("30 6 * * *", async () => {
