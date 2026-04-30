@@ -1522,6 +1522,92 @@ function parseInventoryRows(rows) {
   };
 }
 
+// Per-month-replace merge for the daily auto-sync. Each daily file covers a
+// rolling 15-day window from Cin7. The naive additive merge would double-count
+// SKU monthly totals on the second day's overlap. This function instead:
+//   - For invSku monthly buckets: REPLACES months covered by the new file,
+//     KEEPS months outside that window from the existing snapshot
+//   - For invCat / invRt: same per-month replacement strategy
+//   - For moMovements: overwrites per MO (delta wins, no math drift)
+//   - For SKUs only in existing (no new data this cycle): preserved as-is
+// Mirrors the original server-side Cin7 sync's merge semantics in
+// performCin7Sync (kept around as reference even though that path is dead).
+function mergeInventoryByMonth(existing, delta) {
+  const deltaMonths = new Set(delta.months || []);
+  const skuMap = new Map();
+
+  // Seed with existing SKUs, but strip out months the delta will replace
+  for (const e of existing.invSku || []) {
+    const entry = { ...e, m: {}, rt: { ...(e.rt || {}) }, ti: 0, to: 0, net: 0, bc: e.bc || 0 };
+    for (const m in (e.m || {})) {
+      if (!deltaMonths.has(m)) {
+        entry.m[m] = { ...e.m[m] };
+        entry.ti += e.m[m].i;
+        entry.to += e.m[m].o;
+        entry.net += e.m[m].i - e.m[m].o;
+      }
+    }
+    skuMap.set(e.s, entry);
+  }
+  // Layer fresh months on top
+  for (const e of delta.invSku || []) {
+    if (!skuMap.has(e.s)) {
+      const fresh = { ...e, m: {}, rt: { ...(e.rt || {}) }, ti: 0, to: 0, net: 0, bc: e.bc || 0 };
+      for (const m in (e.m || {})) {
+        fresh.m[m] = { ...e.m[m] };
+        fresh.ti += e.m[m].i;
+        fresh.to += e.m[m].o;
+        fresh.net += e.m[m].i - e.m[m].o;
+      }
+      skuMap.set(e.s, fresh);
+    } else {
+      const entry = skuMap.get(e.s);
+      for (const m in (e.m || {})) {
+        entry.m[m] = { ...e.m[m] };
+        entry.ti += e.m[m].i;
+        entry.to += e.m[m].o;
+        entry.net += e.m[m].i - e.m[m].o;
+      }
+      // Refresh rt totals from the delta side (they're SKU-level totals so a
+      // straight copy is fine — overlapping refs would have been part of the
+      // existing rt totals before, but since we cleared months already, we
+      // rebuild rt strictly from the delta for the in-window data).
+      for (const r in (e.rt || {})) entry.rt[r] = { ...e.rt[r] };
+      if (e.p && !entry.p) entry.p = e.p;
+      if (e.c && !entry.c) entry.c = e.c;
+      if (e.u && !entry.u) entry.u = e.u;
+    }
+  }
+
+  // catAgg / rtAgg — per-month replacement
+  function mergeMonthly(oldAgg, newAgg) {
+    const out = {};
+    for (const k in (oldAgg || {})) {
+      out[k] = {};
+      for (const m in oldAgg[k]) if (!deltaMonths.has(m)) out[k][m] = oldAgg[k][m];
+    }
+    for (const k in (newAgg || {})) {
+      if (!out[k]) out[k] = {};
+      for (const m in newAgg[k]) out[k][m] = newAgg[k][m];
+    }
+    return out;
+  }
+
+  // moMovements — fresh wins per MO (overwrite, not add)
+  const mergedMo = { ...(existing.moMovements || {}) };
+  for (const mo in (delta.moMovements || {})) {
+    mergedMo[mo] = delta.moMovements[mo];
+  }
+
+  return {
+    invSku: [...skuMap.values()],
+    invCat: mergeMonthly(existing.invCat, delta.invCat),
+    invRt:  mergeMonthly(existing.invRt,  delta.invRt),
+    months: [...new Set([...(existing.months || []), ...(delta.months || [])])].sort(),
+    moMovements: mergedMo,
+  };
+}
+
 app.post("/api/cin7/inventory-movements", async (req, res) => {
   // Auth: shared secret. Returns 401 instead of standard requireAuth so this
   // endpoint can be hit by Apps Script without a session cookie.
@@ -1542,13 +1628,12 @@ app.post("/api/cin7/inventory-movements", async (req, res) => {
       return res.status(400).json({ ok: false, error: "Parse failed: " + e.message });
     }
 
-    // Replace mode (matches the recommended UI default for daily rolling reports).
+    // Per-month-replace merge — preserves history outside the rolling window
+    const existing = readData("inventory") || {};
+    const merged = mergeInventoryByMonth(existing, parsed);
+
     const finalData = {
-      invSku: parsed.invSku,
-      invCat: parsed.invCat,
-      invRt: parsed.invRt,
-      months: parsed.months,
-      moMovements: parsed.moMovements || {},
+      ...merged,
       lastSync: new Date().toISOString(),
       lastSyncSource: "gdrive-auto-sync",
       lastSyncFile: filename || null,
@@ -1556,14 +1641,17 @@ app.post("/api/cin7/inventory-movements", async (req, res) => {
     };
     writeData("inventory", finalData);
 
-    console.log(`[gdrive-sync] Ingested ${filename || "(unnamed)"} — ${parsed.rowCount} rows · ${parsed.invSku.length} SKUs · ${Object.keys(parsed.moMovements).length} MOs`);
+    console.log(`[gdrive-sync] Ingested ${filename || "(unnamed)"} — ${parsed.rowCount} rows · ${parsed.invSku.length} new-window SKUs · ${Object.keys(parsed.moMovements).length} new-window MOs · merged total: ${finalData.invSku.length} SKUs · ${Object.keys(finalData.moMovements).length} MOs`);
     res.json({
       ok: true,
       filename: filename || null,
-      rowCount: parsed.rowCount,
-      skuCount: parsed.invSku.length,
-      moCount: Object.keys(parsed.moMovements).length,
-      months: parsed.months,
+      windowRowCount: parsed.rowCount,
+      windowSkuCount: parsed.invSku.length,
+      windowMoCount: Object.keys(parsed.moMovements).length,
+      mergedSkuCount: finalData.invSku.length,
+      mergedMoCount: Object.keys(finalData.moMovements).length,
+      windowMonths: parsed.months,
+      allMonths: finalData.months,
       lastSync: finalData.lastSync,
     });
   } catch (e) {
