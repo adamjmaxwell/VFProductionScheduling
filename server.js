@@ -1336,6 +1336,10 @@ function parseBomCsv(text) {
         version,
         versionName: f[idx.VersionName] || "",
         isDefault: (f[idx.VersionDefault] || "").toLowerCase() === "yes",
+        // QuantityToProduce — the batch size the BOM is defined for. Component
+        // qtys must be divided by this to get the per-unit-of-parent ratio.
+        // Defaults to 1 if missing/blank/zero (treats blanks as a no-op).
+        qtyToProduce: parseFloat(f[idx.QuantityToProduce]) || 1,
         runSize: parseFloat(f[idx.RunSize]) || 0,
         minQty: parseFloat(f[idx.MinQuantity]) || 0,
         maxQty: parseFloat(f[idx.MaxQuantity]) || 0,
@@ -1498,8 +1502,15 @@ function expandBom(parents, parentSku, qty, opts) {
     const bom = versions[0];
     visited.add(sku);
     trail.push({ sku, qty: needed, version: bom.version, depth });
+    // Normalize each component qty to "per 1 unit of parent" by dividing by
+    // the BOM's QuantityToProduce. The Cin7 export defines BOMs at a batch
+    // size (e.g. 25 kg of FG-860 needs 25 kg of WIP-5100043, not 25 kg per
+    // 1 kg of FG). Without this division, requirements get inflated by the
+    // batch size.
+    const batchSize = bom.qtyToProduce || 1;
     for (const c of bom.components) {
-      const eff = applyWastage ? c.qty * (1 + (c.wastagePct || 0) / 100) : c.qty;
+      const perUnit = c.qty / batchSize;
+      const eff = applyWastage ? perUnit * (1 + (c.wastagePct || 0) / 100) : perUnit;
       recurse(c.sku, needed * eff, depth + 1);
     }
     visited.delete(sku);
