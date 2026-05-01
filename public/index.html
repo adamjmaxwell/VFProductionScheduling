@@ -962,17 +962,17 @@ table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
     <div class="card" style="overflow:hidden;">
       <div style="overflow-x:auto;">
         <table class="status-table">
-          <thead>
+          <thead id="mo-status-thead">
             <tr>
-              <th>MO #</th>
-              <th>SKU / Product</th>
-              <th>Machine</th>
-              <th>Start → End</th>
-              <th style="text-align:right;">Planned qty</th>
-              <th style="text-align:right;">Actual in</th>
-              <th>Progress</th>
-              <th>Status</th>
-              <th>Tracking</th>
+              <th class="mo-status-sort" data-key="mo"       onclick="sortMoStatus('mo')"      style="cursor:pointer;user-select:none;">MO # <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="sku"      onclick="sortMoStatus('sku')"     style="cursor:pointer;user-select:none;">SKU / Product <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="machine"  onclick="sortMoStatus('machine')" style="cursor:pointer;user-select:none;">Machine <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="dates"    onclick="sortMoStatus('dates')"   style="cursor:pointer;user-select:none;">Start → End <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="planned"  onclick="sortMoStatus('planned')" style="cursor:pointer;user-select:none;text-align:right;">Planned qty <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="actual"   onclick="sortMoStatus('actual')"  style="cursor:pointer;user-select:none;text-align:right;">Actual in <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="pct"      onclick="sortMoStatus('pct')"     style="cursor:pointer;user-select:none;">Progress <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="status"   onclick="sortMoStatus('status')"  style="cursor:pointer;user-select:none;">Status <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="tracking" onclick="sortMoStatus('tracking')" style="cursor:pointer;user-select:none;">Tracking <span class="sort-arrow"></span></th>
             </tr>
           </thead>
           <tbody id="mo-status-tbody"></tbody>
@@ -1777,7 +1777,13 @@ async function loadInventoryCompletion(){
       const moMatch = (o.orderId||'').match(/MO-\d+/);
       if(!moMatch) return;
       const moId = moMatch[0];
-      plannedByMo[moId] = (plannedByMo[moId] || 0) + (o.qty || 0);
+      // Use o.total (= qty × batches) when present; fall back to a recomputed
+      // value for legacy rows that may not have it set. Plain o.qty would
+      // miss multi-batch rows (e.g. roaster 6×412 = 2,472 kg total planned).
+      const rowPlanned = (o.total != null && o.total > 0)
+        ? o.total
+        : (o.qty || 0) * (o.batches || 1);
+      plannedByMo[moId] = (plannedByMo[moId] || 0) + rowPlanned;
     });
 
     const next = new Set();
@@ -2809,6 +2815,37 @@ function populateMOStatusMachineFilter() {
   });
 }
 
+// MO Status table sort state — persists across re-renders within the session
+let mrpStatusSortKey = null;     // null → default composite sort (status group, then start)
+let mrpStatusSortDir = 'asc';    // 'asc' or 'desc'
+
+function sortMoStatus(key) {
+  if (mrpStatusSortKey === key) {
+    if (mrpStatusSortDir === 'asc') mrpStatusSortDir = 'desc';
+    else { mrpStatusSortKey = null; mrpStatusSortDir = 'asc'; } // third click = reset
+  } else {
+    mrpStatusSortKey = key;
+    mrpStatusSortDir = 'asc';
+  }
+  renderMOStatus();
+}
+
+function updateMoStatusSortArrows() {
+  document.querySelectorAll('#mo-status-thead .mo-status-sort').forEach(th => {
+    const key = th.getAttribute('data-key');
+    const arrow = th.querySelector('.sort-arrow');
+    if (!arrow) return;
+    if (key === mrpStatusSortKey) {
+      arrow.textContent = mrpStatusSortDir === 'asc' ? '↑' : '↓';
+      arrow.style.color = 'var(--vf-brand-orange)';
+      th.style.color = 'var(--vf-text-primary)';
+    } else {
+      arrow.textContent = '';
+      th.style.color = '';
+    }
+  });
+}
+
 async function renderMOStatus() {
   const search  = (document.getElementById('mo-status-search').value || '').toLowerCase();
   const machine = document.getElementById('mo-status-machine').value;
@@ -2842,7 +2879,13 @@ async function renderMOStatus() {
   // Phase 2: turn each bucket into a single row
   const rows = [];
   for (const { moId, items } of buckets.values()) {
-    const planned = items.reduce((s, o) => s + (o.qty || 0), 0);
+    // Use o.total (qty × batches) per row, with a fallback for legacy rows
+    const planned = items.reduce((s, o) => {
+      const rowPlanned = (o.total != null && o.total > 0)
+        ? o.total
+        : (o.qty || 0) * (o.batches || 1);
+      return s + rowPlanned;
+    }, 0);
     const inv     = moId ? moMovements[moId] : null;
     const actual  = inv ? (inv.totalIn || 0) : 0;
     const pct     = planned > 0 ? Math.min(Math.round(actual / planned * 100), 999) : null;
@@ -2937,12 +2980,32 @@ async function renderMOStatus() {
     return true;
   });
 
-  // Sort: in-progress first, then not-started, then complete, then no-mo
-  const ORDER = {'in-progress':0,'not-started':1,'on-hold':2,'complete':3,'no-mo':4};
-  filtered.sort((a,b) => {
-    const so = (ORDER[a.status]??5) - (ORDER[b.status]??5);
-    if (so !== 0) return so;
-    return (a.o.start || '').localeCompare(b.o.start || '');
+  // Default sort: in-progress first, then not-started, then complete, then no-mo
+  const STATUS_ORDER = {'in-progress':0,'not-started':1,'on-hold':2,'complete':3,'no-mo':4};
+  const sortKey = mrpStatusSortKey || 'default';
+  const sortDir = mrpStatusSortDir || 'asc';
+  const cmp = (a, b) => {
+    let av, bv;
+    switch (sortKey) {
+      case 'mo':       av = a.moId || a.o.orderId || ''; bv = b.moId || b.o.orderId || ''; return av.localeCompare(bv);
+      case 'sku':      av = a.o.sku || ''; bv = b.o.sku || ''; return av.localeCompare(bv);
+      case 'machine':  av = a.machineLabel || ''; bv = b.machineLabel || ''; return av.localeCompare(bv);
+      case 'dates':    av = a.o.start || ''; bv = b.o.start || ''; return av.localeCompare(bv);
+      case 'planned':  return (a.planned || 0) - (b.planned || 0);
+      case 'actual':   return (a.actual || 0) - (b.actual || 0);
+      case 'pct':      return (a.pct ?? -1) - (b.pct ?? -1);
+      case 'status':   return (STATUS_ORDER[a.status] ?? 5) - (STATUS_ORDER[b.status] ?? 5);
+      case 'tracking': av = a.tracking || ''; bv = b.tracking || ''; return av.localeCompare(bv);
+      default:
+        // Composite default: status group, then start date
+        const so = (STATUS_ORDER[a.status] ?? 5) - (STATUS_ORDER[b.status] ?? 5);
+        if (so !== 0) return so;
+        return (a.o.start || '').localeCompare(b.o.start || '');
+    }
+  };
+  filtered.sort((a, b) => {
+    const r = cmp(a, b);
+    return sortDir === 'desc' ? -r : r;
   });
 
   const statusBadge = s => {
@@ -2989,6 +3052,7 @@ async function renderMOStatus() {
               : ''}</td>
         </tr>`;
       }).join('');
+  updateMoStatusSortArrows();
 }
 
 async function confirmImport(){
