@@ -2200,6 +2200,10 @@ function buildRequirements(orders, bomParents, opts) {
     const neededBy = o.start < opts.today ? opts.today : o.start;
     for (const leaf of Object.values(expansion.leaves || {})) {
       if (leaf.qty <= 0) continue;
+      // Filter out non-procurable BOM leaves (labor, scrap, output products,
+      // anything that isn't a real raw material or packaging SKU). MRP only
+      // suggests POs for things that get bought.
+      if (!isProcurable(leaf.sku)) continue;
       requirements.push({
         sku: leaf.sku,
         qtyKg: leaf.qty,
@@ -2211,6 +2215,22 @@ function buildRequirements(orders, bomParents, opts) {
     }
   }
   return { requirements, skipped, noBomExamples };
+}
+
+// A BOM leaf is "procurable" if it looks like a real RM, packaging, or
+// supplier-purchased component (FG-FL-* flavors). Excludes labor lines,
+// SCRAP outputs, and anything else that doesn't get bought.
+function isProcurable(sku) {
+  if (!sku) return false;
+  const s = String(sku).toUpperCase();
+  // Known non-procurable patterns
+  if (s.startsWith("LABOR")) return false;
+  if (s === "SCRAP") return false;
+  if (s.startsWith("WIDGET")) return false;   // test data
+  if (s.startsWith("TEST")) return false;     // test data
+  if (s.startsWith("L ") || s === "L") return false; // bare labor codes
+  // Procurable prefixes (matches what the supply settings cover)
+  return /^(RM-|PK-|FG-FL|FLV-|VC-|ING-)/.test(s);
 }
 
 // Forward-walk allocation. For each SKU, walk requirements in date order,

@@ -842,6 +842,7 @@ table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
     <button class="tab" onclick="switchTab('traceability')">Traceability</button>
     <button class="tab" onclick="switchTab('mo-status')">MO Status</button>
     <button class="tab" onclick="switchTab('live-inv')">Live Inventory</button>
+    <button class="tab" onclick="switchTab('mrp')" id="tab-mrp-btn" style="display:none;">MRP</button>
     <button class="tab" onclick="switchTab('mrp-setup')" id="tab-mrp-setup-btn" style="display:none;">MRP Setup</button>
     <button class="tab" onclick="switchTab('admin')" id="tab-admin-btn" style="display:none;">Admin console</button>
   </div>
@@ -1018,6 +1019,100 @@ table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
         <thead id="live-inv-thead"></thead>
         <tbody id="live-inv-tbody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- MRP — operator+ — production-plan-driven material requirements -->
+  <div id="tab-mrp" style="display:none;">
+    <div class="header">
+      <div style="display:flex;align-items:center;gap:var(--vf-space-3);flex-wrap:wrap;">
+        <h2>MRP</h2>
+        <span style="font-size:var(--vf-text-sm);color:var(--vf-text-tertiary);">Production plan × BOMs × on-hand → suggested POs and at-risk MOs</span>
+      </div>
+      <div style="display:flex;gap:var(--vf-space-2);align-items:center;">
+        <span id="mrp-run-ts" style="font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);"></span>
+        <button class="btn btn-sm btn-primary" onclick="runMrp()">↻ Run MRP</button>
+      </div>
+    </div>
+
+    <div style="background:var(--vf-surface-sunken);border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);padding:var(--vf-space-3) var(--vf-space-4);margin-bottom:var(--vf-space-4);">
+      <div style="display:flex;gap:var(--vf-space-4);align-items:center;flex-wrap:wrap;">
+        <strong style="font-size:var(--vf-text-sm);">Settings:</strong>
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          <input type="checkbox" id="mrp-include-unconfirmed" style="margin:0;"/>
+          Include unconfirmed orders
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          <input type="checkbox" id="mrp-apply-wastage" checked style="margin:0;"/>
+          Apply wastage %
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          Horizon (days):
+          <input type="number" id="mrp-horizon-days" min="7" max="365" value="120" style="width:70px;padding:4px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+        </label>
+      </div>
+    </div>
+
+    <div class="status-summary" id="mrp-kpis"></div>
+
+    <div id="mrp-empty" class="no-inv-note" style="display:none;">
+      No MRP run yet. Click "↻ Run MRP" above to compute requirements against the current production plan, BOMs, and on-hand inventory.
+    </div>
+
+    <div id="mrp-results" style="display:none;">
+      <!-- Sub-section selector -->
+      <div style="display:flex;gap:var(--vf-space-2);margin-bottom:var(--vf-space-4);border-bottom:1px solid var(--vf-border-default);">
+        <button class="btn btn-sm" id="mrp-tab-pos"     onclick="switchMrpSection('pos')"     style="border-radius:0;border-bottom:2px solid var(--vf-brand-orange);">Suggested POs</button>
+        <button class="btn btn-sm" id="mrp-tab-risk"    onclick="switchMrpSection('risk')"    style="border-radius:0;background:transparent;">At-risk MOs</button>
+        <button class="btn btn-sm" id="mrp-tab-skus"    onclick="switchMrpSection('skus')"    style="border-radius:0;background:transparent;">All SKUs</button>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+          <button class="btn btn-sm" onclick="exportMrpCsv()">↓ Export POs CSV</button>
+        </span>
+      </div>
+
+      <!-- Suggested POs sub-view -->
+      <div id="mrp-section-pos">
+        <div class="status-filters">
+          <input id="mrp-po-search" placeholder="Search SKU…" oninput="renderMrp()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:220px;height:32px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+            <input type="checkbox" id="mrp-po-overdue-only" onchange="renderMrp()" style="margin:0;"/>
+            Overdue only
+          </label>
+        </div>
+        <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);">
+          <table class="status-table" id="mrp-po-table" style="margin-top:0;">
+            <thead><tr><th>SKU</th><th>Name</th><th style="text-align:right;">Qty to order</th><th>Lead time</th><th>Order by</th><th>Earliest need</th><th>Source</th></tr></thead>
+            <tbody id="mrp-po-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- At-risk MOs sub-view -->
+      <div id="mrp-section-risk" style="display:none;">
+        <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);">
+          <table class="status-table" id="mrp-risk-table" style="margin-top:0;">
+            <thead><tr><th>MO / Order</th><th>FG SKU</th><th style="text-align:right;">Planned</th><th>Earliest shortage</th><th style="text-align:right;">Total short (kg)</th><th>RMs short</th></tr></thead>
+            <tbody id="mrp-risk-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- All SKUs sub-view (drill-down) -->
+      <div id="mrp-section-skus" style="display:none;">
+        <div class="status-filters">
+          <input id="mrp-sku-search" placeholder="Search SKU…" oninput="renderMrp()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:220px;height:32px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+            <input type="checkbox" id="mrp-sku-short-only" onchange="renderMrp()" style="margin:0;"/>
+            Shortfall only
+          </label>
+        </div>
+        <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);">
+          <table class="status-table" id="mrp-sku-table" style="margin-top:0;">
+            <thead><tr><th>SKU</th><th style="text-align:right;">On hand</th><th style="text-align:right;">On order</th><th style="text-align:right;">In transit</th><th style="text-align:right;">Total demand</th><th style="text-align:right;">Total short</th><th>Lead time</th></tr></thead>
+            <tbody id="mrp-sku-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1501,6 +1596,9 @@ function showApp(){
   const isAdmin=currentUser.role==='admin';
   document.getElementById('tab-admin-btn').style.display=isAdmin?'':'none';
   document.getElementById('tab-mrp-setup-btn').style.display=isAdmin?'':'none';
+  // MRP tab visible to admin + operator (anyone who can act on PO suggestions)
+  const canSeeMrp = currentUser.role === 'admin' || currentUser.role === 'operator';
+  document.getElementById('tab-mrp-btn').style.display = canSeeMrp ? '' : 'none';
   document.getElementById('user-badge').innerHTML=
     `<span>${currentUser.username}</span>`+
     `<span class="role-tag">${currentUser.role}</span>`+
@@ -1882,10 +1980,11 @@ function shortSku(s){
 function switchTab(t){
   if(t==='admin'&&(!currentUser||currentUser.role!=='admin'))return;
   if(t==='mrp-setup'&&(!currentUser||currentUser.role!=='admin'))return;
-  ['calendar','orders','capacity','traceability','mo-status','live-inv','mrp-setup','admin'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
+  if(t==='mrp'&&(!currentUser||currentUser.role==='viewer'))return;
+  ['calendar','orders','capacity','traceability','mo-status','live-inv','mrp','mrp-setup','admin'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
   document.querySelectorAll('.tab').forEach(el=>{
     const tabName=el.textContent.trim().toLowerCase();
-    const map={'calendar':'calendar','work orders':'orders','capacity & ops':'capacity','capacity &amp; ops':'capacity','traceability':'traceability','mo status':'mo-status','live inventory':'live-inv','mrp setup':'mrp-setup','admin console':'admin'};
+    const map={'calendar':'calendar','work orders':'orders','capacity & ops':'capacity','capacity &amp; ops':'capacity','traceability':'traceability','mo status':'mo-status','live inventory':'live-inv','mrp':'mrp','mrp setup':'mrp-setup','admin console':'admin'};
     el.classList.toggle('active',map[tabName]===t);
   });
   if(t==='calendar')renderCal();
@@ -1895,6 +1994,7 @@ function switchTab(t){
   if(t==='mo-status'){populateMOStatusMachineFilter();renderMOStatus();loadSyncStatus();}
   if(t==='live-inv')loadLiveInventory();
   if(t==='mrp-setup')loadMrpSetup();
+  if(t==='mrp')loadMrp();
 }
 function shiftCal(d){calOffset+=d*4;renderCal();}
 function resetCal(){calOffset=0;renderCal();}
@@ -2380,6 +2480,168 @@ async function triggerCin7Sync() {
   }
   btn.disabled = false;
   btn.textContent = '⟳ Sync from Cin7';
+}
+
+// ── MRP Tab (operator+) ──────────────────────────────────────────────────────
+//
+// Hits GET /api/mrp/run with the user's chosen toggles, renders three views
+// over the result: suggested POs, at-risk MOs, and a per-SKU drill-down.
+
+let mrpData = null;
+let mrpSection = 'pos';
+
+async function loadMrp() {
+  // Show empty state until the user clicks Run (so we don't spam the API on every tab switch)
+  if (!mrpData) {
+    document.getElementById('mrp-empty').style.display = 'block';
+    document.getElementById('mrp-results').style.display = 'none';
+    document.getElementById('mrp-kpis').innerHTML = '';
+    document.getElementById('mrp-run-ts').textContent = '';
+  } else {
+    renderMrp();
+  }
+}
+
+async function runMrp() {
+  const params = new URLSearchParams({
+    includeUnconfirmed: document.getElementById('mrp-include-unconfirmed').checked ? '1' : '0',
+    applyWastage: document.getElementById('mrp-apply-wastage').checked ? '1' : '0',
+    horizonDays: String(parseInt(document.getElementById('mrp-horizon-days').value, 10) || 120),
+  });
+  const tsEl = document.getElementById('mrp-run-ts');
+  tsEl.textContent = 'Running…';
+  try {
+    const r = await fetch('/api/mrp/run?' + params.toString());
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    mrpData = j;
+    document.getElementById('mrp-empty').style.display = 'none';
+    document.getElementById('mrp-results').style.display = '';
+    const d = new Date(j.runAt);
+    tsEl.textContent = `Last run ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · today=${j.today}`;
+    renderMrp();
+  } catch (e) {
+    tsEl.textContent = 'Failed: ' + e.message;
+    tsEl.style.color = 'var(--vf-danger-text)';
+  }
+}
+
+function switchMrpSection(name) {
+  mrpSection = name;
+  ['pos','risk','skus'].forEach(k => {
+    document.getElementById('mrp-section-' + k).style.display = (k === name) ? '' : 'none';
+    const btn = document.getElementById('mrp-tab-' + k);
+    if (btn) {
+      btn.style.borderBottom = (k === name) ? '2px solid var(--vf-brand-orange)' : '2px solid transparent';
+      btn.style.background = (k === name) ? '' : 'transparent';
+    }
+  });
+}
+
+function renderMrp() {
+  if (!mrpData) return;
+  const s = mrpData.summary || {};
+
+  // KPI strip
+  document.getElementById('mrp-kpis').innerHTML = [
+    { label:'Orders considered', val: (s.ordersConsidered||0).toLocaleString(),    accent:'' },
+    { label:'Suggested POs',     val: (s.suggestedPoCount||0).toLocaleString(),    accent:'var(--vf-info-base)' },
+    { label:'Overdue POs',       val: (s.overduePoCount||0).toLocaleString(),      accent: s.overduePoCount > 0 ? 'var(--vf-danger-base)' : 'var(--vf-success-base)' },
+    { label:'At-risk MOs',       val: (s.atRiskOrderCount||0).toLocaleString(),    accent: s.atRiskOrderCount > 0 ? 'var(--vf-warning-base)' : 'var(--vf-success-base)' },
+  ].map(x => `<div class="metric" style="${x.accent?'border-left:3px solid '+x.accent+';':''}"><div class="metric-label">${x.label}</div><div class="metric-value">${x.val}</div></div>`).join('');
+
+  renderMrpPos();
+  renderMrpRisk();
+  renderMrpSkus();
+}
+
+function renderMrpPos() {
+  const tbody = document.getElementById('mrp-po-tbody');
+  if (!tbody) return;
+  const search = (document.getElementById('mrp-po-search').value || '').toLowerCase();
+  const overdueOnly = document.getElementById('mrp-po-overdue-only').checked;
+  const filtered = (mrpData.suggestedPOs || []).filter(p => {
+    if (overdueOnly && !p.isOverdue) return false;
+    if (search && !p.sku.toLowerCase().includes(search) && !(p.name || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+  tbody.innerHTML = filtered.length === 0 ? `<tr><td colspan="7" class="empty">No POs match.</td></tr>` :
+    filtered.map(p => `<tr>
+      <td><span class="mo-id">${escapeHtml(p.sku)}</span></td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--vf-text-secondary);" title="${escapeHtml(p.name||'')}">${escapeHtml(p.name||'—')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;">${(p.qtyToOrder||0).toLocaleString()}</td>
+      <td>${p.leadTimeDays != null ? p.leadTimeDays + 'd' : '—'}<div style="font-size:10px;color:var(--vf-text-tertiary);">${escapeHtml(p.leadTimeSource||'')}</div></td>
+      <td style="white-space:nowrap;font-size:12px;${p.isOverdue?'color:var(--vf-danger-text);font-weight:600;':''}">${p.mustOrderByDate || '—'}${p.isOverdue ? ' 🚨' : ''}</td>
+      <td style="white-space:nowrap;font-size:12px;color:var(--vf-text-tertiary);">${p.earliestNeedDate || '—'}</td>
+      <td style="font-size:11px;color:var(--vf-text-secondary);">first triggered by upcoming demand</td>
+    </tr>`).join('');
+}
+
+function renderMrpRisk() {
+  const tbody = document.getElementById('mrp-risk-tbody');
+  if (!tbody) return;
+  const orders = mrpData.atRiskOrders || [];
+  tbody.innerHTML = orders.length === 0 ? `<tr><td colspan="6" class="empty">No at-risk MOs. 🎉</td></tr>` :
+    orders.map(o => {
+      const totalShort = o.shortages.reduce((s, x) => s + x.qtyShort, 0);
+      const earliestShortage = o.shortages.reduce((m, s) => (m && m < s.neededByDate) ? m : s.neededByDate, null);
+      const rmsShort = o.shortages.slice(0, 4).map(s => `${escapeHtml(s.sku)} (${Math.round(s.qtyShort).toLocaleString()})`).join(', ');
+      const moreCount = o.shortages.length - 4;
+      return `<tr>
+        <td><span class="mo-id">${escapeHtml(o.orderId)}</span></td>
+        <td style="font-size:12px;">${escapeHtml(o.sourceFgSku || '—')}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${(o.sourceFgQty || 0).toLocaleString()}</td>
+        <td style="white-space:nowrap;font-size:12px;color:var(--vf-warning-text);">${earliestShortage || '—'}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--vf-danger-text);font-weight:500;">${Math.round(totalShort).toLocaleString()}</td>
+        <td style="font-size:11px;color:var(--vf-text-secondary);">${rmsShort}${moreCount > 0 ? ` <span style="color:var(--vf-text-tertiary);">+${moreCount} more</span>` : ''}</td>
+      </tr>`;
+    }).join('');
+}
+
+function renderMrpSkus() {
+  const tbody = document.getElementById('mrp-sku-tbody');
+  if (!tbody) return;
+  const search = (document.getElementById('mrp-sku-search').value || '').toLowerCase();
+  const shortOnly = document.getElementById('mrp-sku-short-only').checked;
+  const rows = (mrpData.skuResults || []).filter(r => {
+    if (shortOnly && r.totalShort <= 0) return false;
+    if (search && !r.sku.toLowerCase().includes(search) && !(r.name||'').toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a, b) => (b.totalShort || 0) - (a.totalShort || 0));
+  tbody.innerHTML = rows.length === 0 ? `<tr><td colspan="7" class="empty">No SKUs match.</td></tr>` :
+    rows.map(r => `<tr>
+      <td><span class="mo-id">${escapeHtml(r.sku)}</span><div style="font-size:10px;color:var(--vf-text-tertiary);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.name||'')}</div></td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;">${Math.round(r.onHand||0).toLocaleString()}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:${r.onOrder>0?'var(--vf-info-text)':'var(--vf-text-tertiary)'};">${Math.round(r.onOrder||0).toLocaleString()}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:${r.inTransit>0?'var(--vf-info-text)':'var(--vf-text-tertiary)'};">${Math.round(r.inTransit||0).toLocaleString()}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;">${Math.round(r.totalDemand||0).toLocaleString()}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:${r.totalShort>0?'var(--vf-danger-text)':'var(--vf-success-text)'};font-weight:500;">${r.totalShort > 0 ? Math.round(r.totalShort).toLocaleString() : '—'}</td>
+      <td style="font-size:11px;">${r.isContract ? '<span class="badge badge-on-hold">contract</span>' : (r.leadTimeDays + 'd')}</td>
+    </tr>`).join('');
+}
+
+function exportMrpCsv() {
+  if (!mrpData || !mrpData.suggestedPOs || !mrpData.suggestedPOs.length) {
+    alert('No POs to export. Run MRP first.');
+    return;
+  }
+  const headers = ['SKU','Name','QtyToOrder','LeadTimeDays','LeadTimeSource','MustOrderBy','EarliestNeed','ProjectedReceipt','Overdue'];
+  const rows = mrpData.suggestedPOs.map(p => [
+    p.sku, p.name || '', p.qtyToOrder, p.leadTimeDays != null ? p.leadTimeDays : '',
+    p.leadTimeSource, p.mustOrderByDate || '', p.earliestNeedDate || '',
+    p.projectedReceiptDate || '', p.isOverdue ? 'YES' : 'no',
+  ].map(v => {
+    const s = String(v);
+    return /[,"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(','));
+  const csv = headers.join(',') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mrp-suggested-pos-' + mrpData.today + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── MRP Setup Tab (admin-only) ───────────────────────────────────────────────
