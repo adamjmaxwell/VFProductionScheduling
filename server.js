@@ -2145,26 +2145,53 @@ function mrpAddDays(dateStr, days) {
   return d.toISOString().slice(0, 10);
 }
 
+// Order.sku field formats vary across the import history — sometimes it's a
+// bare SKU ("FG-888-810-00-US"), sometimes "SKU · Description"
+// ("WIP-5100810-US · 810 CBE_US..."), sometimes "Description  SKU"
+// ("505.EU CBE Liquor  WIP-5100042-EU"). To find the right BOM, try a direct
+// match first, then look for any BOM parent SKU as a word-boundary substring.
+function extractBomSku(orderSku, bomParents) {
+  if (!orderSku) return null;
+  if (bomParents[orderSku]) return orderSku;
+  // Try cleaned forms first (split on common separators, strip whitespace)
+  const candidates = orderSku.split(/[·,]/).map(s => s.trim());
+  for (const c of candidates) {
+    if (bomParents[c]) return c;
+  }
+  // Substring search across all BOM parents — match longest first so
+  // "WIP-5100810" prefers the more specific over a "WIP-5100" substring
+  const allSkus = Object.keys(bomParents).sort((a, b) => b.length - a.length);
+  for (const sku of allSkus) {
+    // Word-boundary regex with escaped special chars
+    const re = new RegExp("(^|[^A-Za-z0-9-])" + sku.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^A-Za-z0-9-]|$)");
+    if (re.test(orderSku)) return sku;
+  }
+  return null;
+}
+
 // Build a flat list of dated leaf-RM requirements from the production plan.
 // Each entry: { sku, qtyKg, neededByDate, sourceOrderId, sourceFgSku, sourceQty }
 function buildRequirements(orders, bomParents, opts) {
   const horizonEnd = mrpAddDays(opts.today, opts.horizonDays);
   const requirements = [];
   const skipped = { unconfirmed: 0, complete: 0, noStart: 0, outsideHorizon: 0, noBom: 0 };
+  const noBomExamples = [];
 
   for (const o of orders) {
     if (!opts.includeUnconfirmed && o.confirmed === false) { skipped.unconfirmed++; continue; }
     if (o.status === "complete") { skipped.complete++; continue; }
     if (!o.start) { skipped.noStart++; continue; }
     if (o.start > horizonEnd) { skipped.outsideHorizon++; continue; }
-    if (o.start < opts.today) {
-      // Past-start orders that aren't complete: still need their materials,
-      // but treat needed-by as today (already overdue)
-    }
-    const fgSku = o.sku;
+
     const plannedQty = o.total || (o.qty || 0) * (o.batches || 1);
-    if (!fgSku || plannedQty <= 0) { skipped.noBom++; continue; }
-    if (!bomParents[fgSku]) { skipped.noBom++; continue; }
+    if (!o.sku || plannedQty <= 0) { skipped.noBom++; continue; }
+
+    const fgSku = extractBomSku(o.sku, bomParents);
+    if (!fgSku) {
+      skipped.noBom++;
+      if (noBomExamples.length < 5) noBomExamples.push({ orderId: o.orderId, sku: o.sku });
+      continue;
+    }
 
     let expansion;
     try { expansion = expandBom(bomParents, fgSku, plannedQty, { applyWastage: opts.applyWastage }); }
@@ -2183,7 +2210,7 @@ function buildRequirements(orders, bomParents, opts) {
       });
     }
   }
-  return { requirements, skipped };
+  return { requirements, skipped, noBomExamples };
 }
 
 // Forward-walk allocation. For each SKU, walk requirements in date order,
@@ -2307,7 +2334,7 @@ app.get("/api/mrp/run", (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
 
     const { orders, bomParents, supply, onHandBySku } = getMrpInputs();
-    const { requirements, skipped } = buildRequirements(orders, bomParents, {
+    const { requirements, skipped, noBomExamples } = buildRequirements(orders, bomParents, {
       today, horizonDays, includeUnconfirmed, applyWastage,
     });
     const { skuResults, suggestedPOs, atRiskOrders } = allocateAndPlan(requirements, onHandBySku, supply, today);
@@ -2320,6 +2347,7 @@ app.get("/api/mrp/run", (req, res) => {
       summary: {
         ordersConsidered: orders.length - (skipped.unconfirmed + skipped.complete + skipped.noStart + skipped.outsideHorizon + skipped.noBom),
         ordersSkipped: skipped,
+        noBomExamples,
         requirementCount: requirements.length,
         skuCount: skuResults.length,
         atRiskOrderCount: atRiskOrders.length,
