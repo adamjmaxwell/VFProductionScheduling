@@ -4,213 +4,808 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Production Planner — Voyage Foods</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Barlow+Condensed:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/voyage-tokens.css">
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;}
-:root{--font-sans:'Menlo','Monaco','Consolas','Courier New',monospace;--color-background-tertiary:#050a14;--color-background-secondary:#0c1525;--color-background-primary:#070d1d;--color-text-primary:#c8d4e8;--color-text-secondary:#567090;--color-text-tertiary:#2e4060;--color-border-tertiary:#142030;--color-border-secondary:#1c2e44;--border-radius-md:2px;--border-radius-lg:3px;}
-body{font-family:var(--font-sans,'Menlo',monospace);font-size:13px;color:var(--color-text-primary,#c8d4e8);background:var(--color-background-tertiary,#050a14);}
-.app{padding:1.25rem 0;}
-.tabs{display:flex;gap:4px;margin-bottom:1.25rem;border-bottom:1px solid var(--color-border-tertiary);padding-bottom:0;}
-.tab{padding:7px 14px;font-size:11px;cursor:pointer;border:none;background:none;color:var(--color-text-secondary);font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-1px;text-transform:uppercase;letter-spacing:0.07em;}
-.tab:hover{color:var(--color-text-primary);}
-.tab.active{color:#ff6600;border-bottom-color:#ff6600;font-weight:600;}
-.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;gap:8px;flex-wrap:wrap;}
-.header h2{font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;}
-.btn{background:transparent;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md,2px);padding:5px 12px;font-size:11px;cursor:pointer;color:var(--color-text-primary);font-family:inherit;text-transform:uppercase;letter-spacing:0.04em;}
-.btn:hover{background:var(--color-background-secondary);}
-.btn-primary{background:#ff6600;color:#fff;border-color:#ff6600;}
-.btn-primary:hover{opacity:0.85;}
-.btn-sm{padding:2px 8px;font-size:10px;}
-.btn-danger{color:#e04040;border-color:#e0404030;}
-.btn-danger:hover{background:#2a0808;}
-.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:1.25rem;}
-.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md,2px);padding:10px 12px;border:1px solid var(--color-border-tertiary);}
-.metric-label{font-size:10px;color:var(--color-text-secondary);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.07em;}
-.metric-value{font-size:20px;font-weight:600;color:#ff6600;}
-.cal-wrap{overflow-x:auto;}
-.cal-table{border-collapse:collapse;min-width:100%;font-size:11px;}
-.cal-table th{padding:4px 6px;font-weight:400;white-space:nowrap;border:1px solid var(--color-border-tertiary);background:var(--color-background-secondary);color:var(--color-text-secondary);}
-.cal-table td{padding:3px 4px;border:1px solid var(--color-border-tertiary);vertical-align:top;min-width:96px;max-width:130px;}
-.zone-row th{background:#0c1525;color:#ff6600;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;padding:5px 6px;border-top:1px solid #ff660030;}
-.machine-label{font-size:11px;font-weight:500;white-space:nowrap;padding:5px 8px;background:var(--color-background-secondary,#0c1525);color:var(--color-text-primary);min-width:115px;max-width:130px;position:sticky;left:0;z-index:2;box-shadow:3px 0 10px rgba(0,0,0,0.6);}
-.zone-row th:first-child{position:sticky;left:0;z-index:2;background:#0c1525 !important;box-shadow:3px 0 10px rgba(0,0,0,0.6);}
-.cal-table thead th:first-child{position:sticky;left:0;z-index:3;background:var(--color-background-secondary,#0c1525) !important;box-shadow:3px 0 10px rgba(0,0,0,0.6);}
-.cal-cell{min-height:52px;cursor:pointer;background:var(--color-background-primary);}
-.cal-cell:hover{background:#0d1a2e !important;}
-.cal-cell.today-col{background:#0a1c3820 !important;}
-.day-hdr{text-align:center;min-width:96px;}
-.day-hdr .dow{font-size:10px;color:var(--color-text-tertiary);display:block;}
-.day-hdr .date{font-size:12px;font-weight:500;}
-.day-hdr.today-hdr .date{color:#ff6600;font-weight:700;}
-.week-sep{border-left:2px solid var(--color-border-secondary) !important;}
-.mo-block{border-radius:1px;padding:3px 5px;margin:2px 0;cursor:pointer;transition:opacity 0.1s;border-left:2px solid transparent;}
-.mo-block:hover{opacity:0.82;}
-.mo-block .mo-id{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.mo-block .mo-sku{font-size:9px;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
-.mo-block .mo-qty{font-size:9px;opacity:0.8;margin-top:1px;white-space:nowrap;}
-.mo-cbe{background:#0a1c38;color:#c8d4e8;border-left-color:#4d8fd4;}
-.mo-cbs{background:#082818;color:#c8d4e8;border-left-color:#27c068;}
-.mo-choc{background:#160d30;color:#c8d4e8;border-left-color:#9b84ee;}
-.mo-roast{background:#1e1000;color:#c8d4e8;border-left-color:#ff6600;}
-.mo-grind{background:#111820;color:#c8d4e8;border-left-color:#567090;}
-.mo-empty{color:var(--color-text-tertiary);font-size:10px;padding:4px;}
-.card{background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg,3px);margin-bottom:8px;overflow:hidden;}
-.card-header{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;background:var(--color-background-secondary);border-bottom:1px solid var(--color-border-tertiary);}
-.card-title{font-size:11px;font-weight:600;flex:1;text-transform:uppercase;letter-spacing:0.06em;}
-.card-meta{font-size:11px;color:var(--color-text-secondary);}
-.chevron{font-size:10px;color:var(--color-text-tertiary);transition:transform 0.15s;}
-.chevron.open{transform:rotate(90deg);}
-table.orders{width:100%;border-collapse:collapse;font-size:12px;}
-table.orders th{text-align:left;padding:5px 12px;color:var(--color-text-secondary);font-weight:400;font-size:10px;border-bottom:1px solid var(--color-border-tertiary);text-transform:uppercase;letter-spacing:0.06em;}
-table.orders td{padding:6px 12px;border-bottom:1px solid var(--color-border-tertiary);vertical-align:middle;}
-table.orders tr:last-child td{border-bottom:none;}
-table.orders tr:hover td{background:var(--color-background-secondary);}
-.badge{display:inline-block;padding:1px 7px;border-radius:2px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;}
-.badge-queued{background:#1a2535;color:#567090;}
-.badge-in-progress{background:#0a1c38;color:#4d8fd4;}
-.badge-complete{background:#082818;color:#27c068;}
-.badge-on-hold{background:#1e1000;color:#cc8820;}
-.badge-high{background:#2a0808;color:#e04040;}
-.badge-med{background:#1e1000;color:#cc8820;}
-.badge-low{background:#1a2535;color:#567090;}
-.empty{text-align:center;padding:2rem;color:var(--color-text-secondary);font-size:12px;}
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:9999;}
-.modal{background:#070d1d;border-radius:var(--border-radius-lg,3px);border:1px solid var(--color-border-secondary);padding:1.5rem;width:520px;max-width:96vw;max-height:90vh;overflow-y:auto;z-index:10000;box-shadow:0 8px 40px rgba(0,0,0,0.8);}
-.modal h2{font-size:14px;font-weight:600;margin-bottom:1.25rem;color:#ff6600;text-transform:uppercase;letter-spacing:0.05em;}
-.field{margin-bottom:10px;}
-.field label{display:block;font-size:10px;color:var(--color-text-secondary);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.07em;}
-.field input,.field select,.field textarea{width:100%;padding:6px 10px;font-size:12px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md,2px);background:var(--color-background-primary);color:var(--color-text-primary);font-family:inherit;}
-.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:#ff6600;}
-.field textarea{resize:vertical;min-height:56px;}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
-.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem;}
-.section-title{font-size:10px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.08em;margin:14px 0 6px;}
-.info-box{background:#0a1c38;color:#4d8fd4;border-radius:var(--border-radius-md,2px);padding:8px 12px;font-size:11px;margin-bottom:10px;border-left:2px solid #4d8fd4;}
-.warn{background:#1e1000;color:#cc8820;border-radius:var(--border-radius-md,2px);padding:8px 12px;font-size:11px;margin-bottom:10px;border-left:2px solid #cc8820;}
-.notice{background:#1e1000;color:#cc8820;border-radius:var(--border-radius-md,2px);padding:9px 12px;font-size:11px;margin-bottom:1rem;border-left:2px solid #cc8820;}
-.divider{border:none;border-top:1px solid var(--color-border-tertiary);margin:12px 0;}
-.zone-header{font-size:10px;font-weight:600;color:#ff6600;text-transform:uppercase;letter-spacing:0.08em;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #ff660030;}
-.machine-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:8px;}
-.machine-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md,2px);padding:11px 13px;border:1px solid var(--color-border-tertiary);}
-.machine-card.cbs{border-left:3px solid #27c068;}
-.machine-card.cbe{border-left:3px solid #4d8fd4;}
-.machine-name{font-size:12px;font-weight:600;margin-bottom:3px;}
-.machine-detail{font-size:11px;color:var(--color-text-secondary);line-height:1.7;}
-.tag{display:inline-block;padding:1px 7px;border-radius:2px;font-size:10px;font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em;}
-.tag-cbs{background:#082818;color:#27c068;}
-.tag-cbe{background:#0a1c38;color:#4d8fd4;}
-.cal-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.cal-period{font-size:11px;color:var(--color-text-secondary);}
-.legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
-.legend-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--color-text-secondary);}
-.legend-dot{width:10px;height:10px;border-radius:1px;}
-.op-chip{background:#160d30;color:#9b84ee;border-radius:2px;padding:2px 9px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;}
-.op-chip-pre{background:#1e1000;color:#cc8820;border-radius:2px;padding:2px 9px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;}
-.op-chip-parallel{background:#082818;color:#27c068;border-radius:var(--border-radius-md,2px);padding:4px 9px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;}
-.op-arrow{color:var(--color-text-tertiary);font-size:11px;}
-.op-pipeline{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;}
-.parallel-group{display:flex;flex-direction:column;gap:4px;border:1px solid #27c06840;border-radius:var(--border-radius-md,2px);padding:5px 8px;background:#08281814;}
-.parallel-label{font-size:10px;color:#27c068;margin-bottom:2px;}
-.save-indicator{font-size:10px;color:var(--color-text-tertiary);margin-left:8px;transition:opacity 0.3s;}
+/* ============================================================================
+   APP-SPECIFIC OVERRIDES — built on top of voyage-tokens.css
+   The .vf-* utility classes from the design system are the preferred building
+   blocks. The legacy .btn, .field, .modal, .tab etc. selectors below are kept
+   so existing markup works, but they all resolve to vf tokens (no hex codes).
+   ========================================================================= */
 
-/* IMPORT MODAL */
-.drop-zone{border:2px dashed var(--color-border-secondary);border-radius:var(--border-radius-md,2px);padding:2.5rem 1.5rem;text-align:center;cursor:pointer;color:var(--color-text-secondary);transition:border-color 0.2s,background 0.2s;user-select:none;}
-.drop-zone:hover,.drop-zone.drag-over{border-color:#ff6600;background:var(--color-background-secondary);}
-.drop-zone .drop-icon{font-size:30px;margin-bottom:8px;}
-.drop-zone .drop-label{font-size:13px;margin-bottom:4px;color:var(--color-text-primary);}
-.drop-zone .drop-hint{font-size:11px;color:var(--color-text-tertiary);}
-.modal.import-modal{width:780px;}
-.import-preview{margin-top:8px;max-height:340px;overflow-y:auto;border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md,2px);}
-table.import-tbl{width:100%;border-collapse:collapse;font-size:11px;}
-table.import-tbl th{text-align:left;padding:5px 8px;color:var(--color-text-secondary);font-weight:400;font-size:10px;border-bottom:1px solid var(--color-border-tertiary);background:var(--color-background-secondary);position:sticky;top:0;text-transform:uppercase;letter-spacing:0.06em;}
-table.import-tbl td{padding:5px 8px;border-bottom:1px solid var(--color-border-tertiary);vertical-align:middle;}
-table.import-tbl tr:last-child td{border-bottom:none;}
-table.import-tbl tr:hover td{background:var(--color-background-secondary);}
-.badge-new{background:#082818;color:#27c068;}
-.badge-update{background:#0a1c38;color:#4d8fd4;}
-.badge-same{background:#1a2535;color:#567090;}
-.import-summary{font-size:11px;color:var(--color-text-secondary);margin-bottom:8px;}
-.import-changes{font-size:10px;color:var(--color-text-tertiary);line-height:1.5;margin-top:2px;}
-.import-spinner{text-align:center;padding:2rem 1rem;color:var(--color-text-secondary);font-size:12px;}
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* LOGIN & ADMIN STYLES */
-.login-overlay{position:fixed;inset:0;background:var(--color-background-tertiary,#050a14);display:flex;align-items:center;justify-content:center;z-index:200;}
-.login-box{background:var(--color-background-primary,#070d1d);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg,3px);padding:2rem;width:360px;max-width:92vw;text-align:center;}
-.login-box h2{font-size:16px;font-weight:700;margin-bottom:4px;color:#ff6600;text-transform:uppercase;letter-spacing:0.06em;}
-.login-box .login-sub{font-size:11px;color:var(--color-text-secondary);margin-bottom:1.5rem;}
-.login-box .field{text-align:left;}
-.login-box .login-err{color:#e04040;font-size:11px;margin-bottom:10px;min-height:18px;}
-.login-box .btn-primary{width:100%;padding:9px;font-size:13px;}
-.user-badge{font-size:11px;color:var(--color-text-secondary);display:flex;align-items:center;gap:6px;}
-.user-badge .role-tag{background:#160d30;color:#9b84ee;border-radius:2px;padding:1px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;}
-.user-badge .logout-btn{cursor:pointer;color:var(--color-text-secondary);text-decoration:underline;font-size:11px;background:none;border:none;font-family:inherit;}
-.user-badge .logout-btn:hover{color:#e04040;}
-.admin-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px;}
-.admin-table th{text-align:left;padding:7px 12px;color:var(--color-text-secondary);font-weight:400;font-size:10px;border-bottom:1px solid var(--color-border-tertiary);text-transform:uppercase;letter-spacing:0.07em;}
-.admin-table td{padding:7px 12px;border-bottom:1px solid var(--color-border-tertiary);vertical-align:middle;}
-.admin-table tr:hover td{background:var(--color-background-secondary);}
-.role-admin{background:#2a0808;color:#e04040;border-radius:2px;padding:1px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;}
-.role-operator{background:#0a1c38;color:#4d8fd4;border-radius:2px;padding:1px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;}
-.role-viewer{background:#1a2535;color:#567090;border-radius:2px;padding:1px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;}
+body {
+  font-family: var(--vf-font-sans);
+  font-size: var(--vf-text-base);
+  line-height: var(--vf-leading-normal);
+  color: var(--vf-text-primary);
+  background: var(--vf-surface-page);
+}
 
-/* MO STATUS PAGE */
-.status-table{width:100%;border-collapse:collapse;font-size:12px;}
-.status-table th{text-align:left;padding:6px 12px;color:var(--color-text-secondary);font-weight:400;font-size:10px;border-bottom:1px solid var(--color-border-tertiary);text-transform:uppercase;letter-spacing:0.07em;white-space:nowrap;}
-.status-table td{padding:7px 12px;border-bottom:1px solid var(--color-border-tertiary);vertical-align:middle;}
-.status-table tr:last-child td{border-bottom:none;}
-.status-table tr:hover td{background:var(--color-background-secondary);}
-.status-table .mo-id{font-weight:600;font-family:monospace;font-size:12px;color:#ff6600;}
-.status-table .tbd-id{color:var(--color-text-tertiary);font-style:italic;font-size:11px;}
-.progress-bar-wrap{width:90px;height:4px;background:var(--color-border-tertiary);border-radius:1px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:6px;}
-.progress-bar-fill{height:100%;border-radius:1px;background:#27c068;transition:width 0.3s;}
-.progress-bar-fill.near{background:#ff6600;}
-.progress-bar-fill.over{background:#4d8fd4;}
-.status-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:1rem;}
-.status-filters input{padding:5px 10px;font-size:12px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md,2px);background:var(--color-background-primary);color:var(--color-text-primary);font-family:inherit;width:200px;}
-.status-filters select{padding:5px 10px;font-size:12px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md,2px);background:var(--color-background-primary);color:var(--color-text-primary);font-family:inherit;}
-.status-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:1.25rem;}
-.no-inv-note{background:#1e1000;color:#cc8820;border-radius:var(--border-radius-md,2px);padding:8px 12px;font-size:11px;margin-bottom:1rem;border-left:2px solid #cc8820;}
-.badge-on-track{background:#082818;color:#27c068;}
-.badge-off-track{background:#2a0808;color:#e04040;}
+.app { padding: 0 var(--vf-space-5) var(--vf-space-5); max-width: var(--vf-container-max); margin: 0 auto; }
 
-/* AI CHAT WIDGET */
-#ai-widget{position:fixed;bottom:24px;right:24px;z-index:8000;display:flex;flex-direction:column;align-items:flex-end;gap:12px;}
-#ai-fab{width:52px;height:52px;border-radius:50%;background:#ff6600;color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(255,102,0,0.45);transition:transform 0.15s,background 0.15s;flex-shrink:0;}
-#ai-fab:hover{background:#e05500;transform:scale(1.06);}
-#ai-fab svg{width:22px;height:22px;}
-#ai-panel{width:360px;background:#070d1d;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg,3px);box-shadow:0 8px 40px rgba(0,0,0,0.8);display:flex;flex-direction:column;max-height:520px;overflow:hidden;}
-.ai-panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 10px;border-bottom:1px solid var(--color-border-tertiary);flex-shrink:0;background:var(--color-background-secondary);}
-.ai-panel-title{font-size:11px;font-weight:600;display:flex;align-items:center;gap:7px;text-transform:uppercase;letter-spacing:0.07em;color:#ff6600;}
-.ai-panel-title .ai-dot{width:7px;height:7px;border-radius:50%;background:#27c068;}
-.ai-close-btn{background:none;border:none;cursor:pointer;color:var(--color-text-tertiary);font-size:16px;line-height:1;padding:2px 4px;}
-.ai-close-btn:hover{color:var(--color-text-primary);}
-#ai-messages{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
-.ai-msg{max-width:88%;font-size:12px;line-height:1.5;}
-.ai-msg.user{align-self:flex-end;background:#ff6600;color:#fff;border-radius:2px 2px 0 2px;padding:8px 12px;}
-.ai-msg.assistant{align-self:flex-start;background:var(--color-background-secondary);color:var(--color-text-primary);border-radius:2px 2px 2px 0;padding:8px 12px;white-space:pre-wrap;border-left:2px solid #ff6600;}
-.ai-msg.error{align-self:flex-start;background:#2a0808;color:#e04040;border-radius:2px;padding:8px 12px;}
-.ai-typing{align-self:flex-start;display:flex;gap:10px;align-items:center;padding:10px 14px;background:var(--color-background-secondary);border-radius:2px;border-left:2px solid #ff6600;min-width:200px;}
-.ai-typing-dots{display:flex;gap:4px;flex-shrink:0;}
-.ai-typing span{width:6px;height:6px;border-radius:50%;background:#ff6600;animation:ai-bounce 1.2s infinite ease-in-out;}
-.ai-typing span:nth-child(2){animation-delay:0.2s;}
-.ai-typing span:nth-child(3){animation-delay:0.4s;}
-.ai-typing-label{font-size:11px;color:#ff6600;letter-spacing:0.04em;animation:ai-label-fade 0.4s ease-in;}
-@keyframes ai-bounce{0%,80%,100%{transform:translateY(0);}40%{transform:translateY(-6px);}}
-@keyframes ai-label-fade{from{opacity:0;transform:translateX(-4px);}to{opacity:1;transform:translateX(0);}}
-#ai-fab.loading{animation:ai-fab-pulse 1.4s infinite ease-in-out;}
-@keyframes ai-fab-pulse{0%,100%{box-shadow:0 4px 20px rgba(255,102,0,0.45);}50%{box-shadow:0 0 0 8px rgba(255,102,0,0.15),0 4px 28px rgba(255,102,0,0.7);}}
-.ai-input-area{border-top:1px solid var(--color-border-tertiary);padding:10px 12px;display:flex;gap:8px;align-items:flex-end;flex-shrink:0;background:var(--color-background-secondary);}
-#ai-input{flex:1;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md,2px);padding:6px 10px;font-size:12px;font-family:inherit;resize:none;max-height:100px;overflow-y:auto;color:var(--color-text-primary);background:var(--color-background-primary);}
-#ai-input:focus{outline:none;border-color:#ff6600;}
-#ai-send-btn{flex-shrink:0;background:#ff6600;color:#fff;border:none;border-radius:var(--border-radius-md,2px);padding:6px 13px;font-size:12px;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;}
-#ai-send-btn:hover{opacity:0.85;}
-#ai-send-btn:disabled{opacity:0.4;cursor:not-allowed;}
-.ai-empty{color:var(--color-text-tertiary);font-size:12px;text-align:center;margin-top:32px;line-height:1.6;}
-.ai-quick-btn{background:var(--color-background-secondary);border:1px solid var(--color-border-secondary);border-radius:2px;padding:3px 10px;font-size:10px;cursor:pointer;color:var(--color-text-secondary);font-family:inherit;white-space:nowrap;text-transform:uppercase;letter-spacing:0.04em;}
-.ai-quick-btn:hover{background:var(--color-border-secondary);color:#ff6600;}
+/* ── Top bar + tabs ─────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: var(--vf-space-6);
+  margin: 0 calc(-1 * var(--vf-space-5)) var(--vf-space-5);
+  padding: 0 var(--vf-space-5);
+  background: var(--vf-surface-sunken);
+  border-bottom: 1px solid var(--vf-border-default);
+}
+.tab {
+  padding: var(--vf-space-3) 0;
+  font-family: inherit;
+  font-size: var(--vf-text-xs);
+  font-weight: var(--vf-weight-medium);
+  letter-spacing: var(--vf-tracking-wider);
+  text-transform: uppercase;
+  color: var(--vf-text-tertiary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: color var(--vf-duration-fast) var(--vf-ease-out);
+}
+.tab:hover { color: var(--vf-text-primary); }
+.tab.active { color: var(--vf-brand-navy); border-bottom-color: var(--vf-brand-orange); }
+
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--vf-space-4); gap: var(--vf-space-2); flex-wrap: wrap; }
+.header h2 {
+  font-family: var(--vf-font-display);
+  font-size: var(--vf-text-xl);
+  font-weight: var(--vf-weight-medium);
+  letter-spacing: var(--vf-tracking-tight);
+  color: var(--vf-brand-navy);
+  text-transform: none;
+}
+
+/* ── Buttons (legacy .btn maps onto vf-btn semantics) ────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vf-space-2);
+  height: 32px;
+  padding: 0 var(--vf-space-3);
+  background: var(--vf-surface-raised);
+  color: var(--vf-text-primary);
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-sm);
+  font-family: inherit;
+  font-size: var(--vf-text-md);
+  font-weight: var(--vf-weight-medium);
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: background var(--vf-duration-fast) var(--vf-ease-out),
+              border-color var(--vf-duration-fast) var(--vf-ease-out);
+}
+.btn:hover { background: var(--vf-surface-hover); border-color: var(--vf-border-strong); }
+.btn-primary { background: var(--vf-brand-orange); color: var(--vf-text-inverse); border-color: var(--vf-brand-orange); }
+.btn-primary:hover { background: var(--vf-brand-orange-hover); border-color: var(--vf-brand-orange-hover); opacity: 1; }
+.btn-sm { height: 26px; padding: 0 var(--vf-space-2); font-size: var(--vf-text-sm); }
+.btn-danger { color: var(--vf-danger-text); border-color: var(--vf-danger-base); background: var(--vf-surface-raised); }
+.btn-danger:hover { background: var(--vf-danger-soft); border-color: var(--vf-danger-base); }
+
+/* ── KPI metrics row ─────────────────────────────────────────────────────── */
+
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--vf-space-3); margin-bottom: var(--vf-space-5); }
+.metric {
+  background: var(--vf-surface-sunken);
+  border-radius: var(--vf-radius-md);
+  padding: var(--vf-space-4);
+  border: 1px solid var(--vf-border-subtle);
+}
+.metric-label {
+  font-size: var(--vf-text-xs);
+  font-weight: var(--vf-weight-medium);
+  color: var(--vf-text-tertiary);
+  margin-bottom: var(--vf-space-2);
+  text-transform: uppercase;
+  letter-spacing: var(--vf-tracking-wide);
+}
+.metric-value {
+  font-family: var(--vf-font-display);
+  font-size: var(--vf-text-3xl);
+  font-weight: var(--vf-weight-medium);
+  color: var(--vf-brand-navy);
+  line-height: 1;
+}
+
+/* ── Calendar / schedule grid ────────────────────────────────────────────── */
+
+.cal-wrap { overflow-x: auto; background: var(--vf-surface-raised); border: 1px solid var(--vf-border-default); border-radius: var(--vf-radius-md); }
+.cal-table { border-collapse: collapse; min-width: 100%; font-size: var(--vf-text-sm); }
+.cal-table th {
+  padding: var(--vf-space-2) var(--vf-space-2);
+  font-weight: var(--vf-weight-medium);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--vf-border-default);
+  background: var(--vf-surface-sunken);
+  color: var(--vf-text-tertiary);
+  font-size: var(--vf-text-xs);
+  letter-spacing: var(--vf-tracking-wide);
+  text-transform: uppercase;
+}
+.cal-table td { padding: var(--vf-space-1) var(--vf-space-1); border-bottom: 1px solid var(--vf-border-subtle); border-right: 1px solid var(--vf-border-subtle); vertical-align: top; min-width: 96px; max-width: 130px; }
+.zone-row th {
+  background: var(--vf-surface-sunken);
+  color: var(--vf-brand-navy);
+  font-size: var(--vf-text-xs);
+  font-weight: var(--vf-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--vf-tracking-wider);
+  padding: var(--vf-space-2) var(--vf-space-3);
+  border-top: 1px solid var(--vf-border-default);
+}
+.machine-label {
+  font-size: var(--vf-text-sm);
+  font-weight: var(--vf-weight-medium);
+  white-space: nowrap;
+  padding: var(--vf-space-2) var(--vf-space-3);
+  background: var(--vf-surface-sunken);
+  color: var(--vf-text-secondary);
+  min-width: 130px;
+  max-width: 150px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  box-shadow: 2px 0 4px rgba(17, 24, 39, 0.04);
+}
+.zone-row th:first-child {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--vf-surface-sunken) !important;
+  box-shadow: 2px 0 4px rgba(17, 24, 39, 0.04);
+}
+.cal-table thead th:first-child {
+  position: sticky; left: 0; z-index: 3;
+  background: var(--vf-surface-sunken) !important;
+  box-shadow: 2px 0 4px rgba(17, 24, 39, 0.04);
+}
+.cal-cell { min-height: 52px; cursor: pointer; background: var(--vf-surface-raised); }
+.cal-cell:hover { background: var(--vf-surface-hover) !important; }
+.cal-cell.today-col { background: var(--vf-surface-selected) !important; }
+.day-hdr { text-align: center; min-width: 96px; }
+.day-hdr .dow { font-size: var(--vf-text-xs); color: var(--vf-text-tertiary); display: block; }
+.day-hdr .date { font-size: var(--vf-text-sm); font-weight: var(--vf-weight-medium); color: var(--vf-text-primary); }
+.day-hdr.today-hdr .date { color: var(--vf-brand-orange); font-weight: var(--vf-weight-semibold); }
+.week-sep { border-left: 2px solid var(--vf-border-default) !important; }
+
+/* ── MO blocks inside calendar cells (category-color based) ──────────────── */
+
+.mo-block {
+  border-radius: var(--vf-radius-xs);
+  padding: var(--vf-space-1) var(--vf-space-2);
+  margin: 2px 0;
+  cursor: pointer;
+  transition: filter var(--vf-duration-fast) var(--vf-ease-out);
+  border-left: 3px solid transparent;
+  box-shadow: var(--vf-shadow-xs);
+  background: var(--vf-cat-gray-soft);
+  color: var(--vf-cat-gray-strong);
+  border-left-color: var(--vf-cat-gray-base);
+}
+.mo-block:hover { filter: brightness(0.96); }
+.mo-block .mo-id { font-size: var(--vf-text-xs); font-weight: var(--vf-weight-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--vf-brand-navy); }
+.mo-block .mo-sku { font-size: 10px; color: var(--vf-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.mo-block .mo-qty { font-size: 10px; font-weight: var(--vf-weight-medium); color: var(--vf-text-primary); margin-top: 1px; white-space: nowrap; }
+.mo-block .mo-qty-actual { font-size: 10px; font-weight: var(--vf-weight-medium); color: var(--vf-success-text); margin-top: 1px; white-space: nowrap; }
+.mo-block--complete .mo-qty-actual { color: var(--vf-success-text); }
+
+/* Category palette — these names match the design guide table */
+.mo-cbe   { background: var(--vf-cat-blue-soft);   border-left-color: var(--vf-cat-blue-base);   color: var(--vf-cat-blue-strong); }
+.mo-cbs   { background: var(--vf-cat-green-soft);  border-left-color: var(--vf-cat-green-base);  color: var(--vf-cat-green-strong); }
+.mo-choc  { background: var(--vf-cat-purple-soft); border-left-color: var(--vf-cat-purple-base); color: var(--vf-cat-purple-strong); }
+.mo-roast { background: var(--vf-cat-orange-soft); border-left-color: var(--vf-cat-orange-base); color: var(--vf-cat-orange-strong); }
+.mo-grind { background: var(--vf-cat-teal-soft);   border-left-color: var(--vf-cat-teal-base);   color: var(--vf-cat-teal-strong); }
+.mo-empty { color: var(--vf-text-muted); font-size: var(--vf-text-xs); padding: var(--vf-space-1); text-align: center; }
+
+/* Completed MOs — faded out with a checkmark prefix and a strikethrough on
+   the SKU line. Keeps the category color visible so you still know what
+   was produced, but clearly marks the order as done. */
+.mo-block--complete { opacity: 0.55; background: var(--vf-surface-sunken); border-left-style: solid; }
+.mo-block--complete .mo-id { color: var(--vf-success-text); }
+.mo-block--complete .mo-sku { text-decoration: line-through; }
+.mo-block--complete:hover { opacity: 0.85; }
+
+/* Calendar search hits — orange ring on matching MO blocks, others dim */
+.mo-block--match {
+  outline: 2px solid var(--vf-brand-orange);
+  outline-offset: -1px;
+  box-shadow: 0 0 0 4px var(--vf-brand-orange-soft);
+  z-index: 1;
+  position: relative;
+}
+.cal-table.cal-searching .mo-block:not(.mo-block--match) { opacity: 0.35; }
+
+/* Tentative (unconfirmed) orders — dashed left border + reduced opacity.
+   Keeps the category color visible so the operator can still tell what it is,
+   but signals "this is not yet committed" at a glance. Phase 3 MRP will be
+   able to ignore these unless "include unconfirmed" is enabled. */
+.mo-block--tentative {
+  border-left-style: dashed;
+  border-left-width: 3px;
+  opacity: 0.78;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0,
+    transparent 6px,
+    rgba(17, 24, 39, 0.04) 6px,
+    rgba(17, 24, 39, 0.04) 8px
+  );
+}
+.mo-block--tentative .mo-id::before {
+  content: '◌ ';
+  color: var(--vf-text-tertiary);
+  font-weight: var(--vf-weight-medium);
+}
+.mo-done-mark {
+  display: inline-block;
+  width: 12px; height: 12px;
+  line-height: 12px;
+  text-align: center;
+  background: var(--vf-success-base);
+  color: var(--vf-text-inverse);
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: var(--vf-weight-semibold);
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+/* ── Cards (Work Orders accordions) ──────────────────────────────────────── */
+
+.card {
+  background: var(--vf-surface-raised);
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-md);
+  margin-bottom: var(--vf-space-2);
+  overflow: hidden;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--vf-space-3);
+  padding: var(--vf-space-3) var(--vf-space-4);
+  cursor: pointer;
+  background: var(--vf-surface-sunken);
+  border-bottom: 1px solid var(--vf-border-subtle);
+}
+.card-header:hover { background: var(--vf-surface-hover); }
+.card-title { font-size: var(--vf-text-base); font-weight: var(--vf-weight-medium); flex: 1; color: var(--vf-text-primary); }
+.card-meta { font-size: var(--vf-text-sm); color: var(--vf-text-secondary); }
+.chevron { font-size: 10px; color: var(--vf-text-tertiary); transition: transform var(--vf-duration-fast); }
+.chevron.open { transform: rotate(90deg); }
+
+table.orders { width: 100%; border-collapse: collapse; font-size: var(--vf-text-base); }
+table.orders th {
+  text-align: left;
+  padding: var(--vf-space-2) var(--vf-space-4);
+  background: var(--vf-surface-sunken);
+  color: var(--vf-text-tertiary);
+  font-weight: var(--vf-weight-medium);
+  font-size: var(--vf-text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--vf-tracking-wide);
+  border-bottom: 1px solid var(--vf-border-default);
+}
+table.orders td { padding: var(--vf-space-3) var(--vf-space-4); border-bottom: 1px solid var(--vf-border-subtle); vertical-align: middle; }
+table.orders tr:last-child td { border-bottom: none; }
+table.orders tr:hover td { background: var(--vf-surface-hover); }
+
+/* ── Status badges (legacy + semantic) ───────────────────────────────────── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--vf-space-1);
+  height: 20px;
+  padding: 0 var(--vf-space-2);
+  border-radius: var(--vf-radius-pill);
+  font-size: var(--vf-text-xs);
+  font-weight: var(--vf-weight-medium);
+  letter-spacing: var(--vf-tracking-wide);
+  line-height: 1;
+}
+.badge-queued      { background: var(--vf-cat-gray-soft);   color: var(--vf-cat-gray-strong); }
+.badge-in-progress { background: var(--vf-info-soft);       color: var(--vf-info-text); }
+.badge-complete    { background: var(--vf-success-soft);    color: var(--vf-success-text); }
+.badge-on-hold     { background: var(--vf-warning-soft);    color: var(--vf-warning-text); }
+.badge-high        { background: var(--vf-danger-soft);     color: var(--vf-danger-text); }
+.badge-med         { background: var(--vf-warning-soft);    color: var(--vf-warning-text); }
+.badge-low         { background: var(--vf-cat-gray-soft);   color: var(--vf-cat-gray-strong); }
+.badge-on-track    { background: var(--vf-success-soft);    color: var(--vf-success-text); }
+.badge-off-track   { background: var(--vf-danger-soft);     color: var(--vf-danger-text); }
+
+.empty { text-align: center; padding: var(--vf-space-8); color: var(--vf-text-muted); font-size: var(--vf-text-md); }
+
+/* ── Modals ──────────────────────────────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: var(--vf-z-modal);
+}
+.modal {
+  background: var(--vf-surface-raised);
+  border-radius: var(--vf-radius-md);
+  border: 1px solid var(--vf-border-default);
+  padding: var(--vf-space-6);
+  width: 520px;
+  max-width: 96vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  z-index: calc(var(--vf-z-modal) + 1);
+  box-shadow: var(--vf-shadow-lg);
+}
+.modal h2 {
+  font-family: var(--vf-font-display);
+  font-size: var(--vf-text-xl);
+  font-weight: var(--vf-weight-medium);
+  margin-bottom: var(--vf-space-4);
+  color: var(--vf-brand-navy);
+  text-transform: none;
+  letter-spacing: var(--vf-tracking-tight);
+}
+
+.field { margin-bottom: var(--vf-space-3); }
+.field label {
+  display: block;
+  font-size: var(--vf-text-sm);
+  font-weight: var(--vf-weight-medium);
+  color: var(--vf-text-secondary);
+  margin-bottom: var(--vf-space-1);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.field input, .field select, .field textarea {
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--vf-space-3);
+  font-size: var(--vf-text-md);
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-sm);
+  background: var(--vf-surface-raised);
+  color: var(--vf-text-primary);
+  font-family: inherit;
+  transition: border-color var(--vf-duration-fast), box-shadow var(--vf-duration-fast);
+}
+.field input:hover, .field select:hover, .field textarea:hover { border-color: var(--vf-border-strong); }
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--vf-border-focus);
+  box-shadow: var(--vf-shadow-focus);
+}
+.field textarea { height: auto; padding: var(--vf-space-2) var(--vf-space-3); resize: vertical; min-height: 64px; }
+
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 30px; }
+.pw-toggle {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  background: transparent; border: none; cursor: pointer;
+  padding: 2px 4px;
+  color: var(--vf-text-tertiary);
+  display: flex; align-items: center; justify-content: center;
+}
+.pw-toggle:hover { color: var(--vf-text-primary); }
+.pw-toggle svg { width: 14px; height: 14px; display: block; }
+
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--vf-space-3); }
+.row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--vf-space-3); }
+.modal-actions { display: flex; gap: var(--vf-space-2); justify-content: flex-end; margin-top: var(--vf-space-5); }
+
+/* ── Capacity & Ops content blocks ───────────────────────────────────────── */
+
+.section-title {
+  font-size: var(--vf-text-xs);
+  font-weight: var(--vf-weight-medium);
+  color: var(--vf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--vf-tracking-wider);
+  margin: var(--vf-space-4) 0 var(--vf-space-2);
+}
+.info-box {
+  background: var(--vf-info-soft);
+  color: var(--vf-info-text);
+  border-radius: var(--vf-radius-sm);
+  padding: var(--vf-space-2) var(--vf-space-3);
+  font-size: var(--vf-text-sm);
+  margin-bottom: var(--vf-space-3);
+  border-left: 3px solid var(--vf-info-base);
+}
+.warn, .notice {
+  background: var(--vf-warning-soft);
+  color: var(--vf-warning-text);
+  border-radius: var(--vf-radius-sm);
+  padding: var(--vf-space-2) var(--vf-space-3);
+  font-size: var(--vf-text-sm);
+  margin-bottom: var(--vf-space-3);
+  border-left: 3px solid var(--vf-warning-base);
+}
+.divider { border: none; border-top: 1px solid var(--vf-border-subtle); margin: var(--vf-space-3) 0; }
+
+.zone-header {
+  font-family: var(--vf-font-display);
+  font-size: var(--vf-text-lg);
+  font-weight: var(--vf-weight-medium);
+  color: var(--vf-brand-navy);
+  letter-spacing: var(--vf-tracking-tight);
+  margin: var(--vf-space-5) 0 var(--vf-space-3);
+  padding-bottom: var(--vf-space-2);
+  border-bottom: 1px solid var(--vf-border-default);
+  text-transform: none;
+}
+.machine-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--vf-space-3); margin-bottom: var(--vf-space-3); }
+.machine-card {
+  background: var(--vf-surface-raised);
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-md);
+  padding: var(--vf-space-3) var(--vf-space-4);
+}
+.machine-card.cbs { border-left: 3px solid var(--vf-cat-green-base); }
+.machine-card.cbe { border-left: 3px solid var(--vf-cat-blue-base); }
+.machine-name { font-size: var(--vf-text-md); font-weight: var(--vf-weight-medium); margin-bottom: var(--vf-space-1); color: var(--vf-text-primary); }
+.machine-detail { font-size: var(--vf-text-sm); color: var(--vf-text-secondary); line-height: var(--vf-leading-relaxed); }
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--vf-space-2);
+  border-radius: var(--vf-radius-pill);
+  font-size: var(--vf-text-xs);
+  font-weight: var(--vf-weight-medium);
+  margin-bottom: var(--vf-space-1);
+  letter-spacing: var(--vf-tracking-wide);
+}
+.tag-cbs { background: var(--vf-cat-green-soft); color: var(--vf-cat-green-strong); }
+.tag-cbe { background: var(--vf-cat-blue-soft); color: var(--vf-cat-blue-strong); }
+
+.cal-nav { display: flex; align-items: center; gap: var(--vf-space-2); flex-wrap: wrap; }
+.cal-period { font-size: var(--vf-text-sm); color: var(--vf-text-secondary); font-weight: var(--vf-weight-medium); }
+.legend { display: flex; gap: var(--vf-space-3); flex-wrap: wrap; margin-bottom: var(--vf-space-3); align-items: center; }
+.legend-item { display: flex; align-items: center; gap: var(--vf-space-1); font-size: var(--vf-text-xs); color: var(--vf-text-secondary); }
+.legend-dot { width: 10px; height: 10px; border-radius: var(--vf-radius-xs); }
+
+.op-chip {
+  background: var(--vf-cat-purple-soft); color: var(--vf-cat-purple-strong);
+  border-radius: var(--vf-radius-pill); padding: 2px 10px;
+  font-size: var(--vf-text-xs); font-weight: var(--vf-weight-medium);
+  letter-spacing: var(--vf-tracking-wide);
+}
+.op-chip-pre {
+  background: var(--vf-cat-orange-soft); color: var(--vf-cat-orange-strong);
+  border-radius: var(--vf-radius-pill); padding: 2px 10px;
+  font-size: var(--vf-text-xs); font-weight: var(--vf-weight-medium);
+  letter-spacing: var(--vf-tracking-wide);
+}
+.op-chip-parallel {
+  background: var(--vf-cat-green-soft); color: var(--vf-cat-green-strong);
+  border-radius: var(--vf-radius-sm); padding: 4px 10px;
+  font-size: var(--vf-text-xs); font-weight: var(--vf-weight-medium);
+  letter-spacing: var(--vf-tracking-wide);
+}
+.op-arrow { color: var(--vf-text-tertiary); font-size: var(--vf-text-sm); }
+.op-pipeline { display: flex; gap: var(--vf-space-2); align-items: center; flex-wrap: wrap; margin-top: var(--vf-space-1); }
+.parallel-group {
+  display: flex; flex-direction: column; gap: var(--vf-space-1);
+  border: 1px solid var(--vf-cat-green-base);
+  border-radius: var(--vf-radius-sm);
+  padding: var(--vf-space-1) var(--vf-space-2);
+  background: var(--vf-cat-green-soft);
+}
+.parallel-label { font-size: var(--vf-text-xs); color: var(--vf-cat-green-strong); margin-bottom: 2px; font-weight: var(--vf-weight-medium); }
+.save-indicator { font-size: var(--vf-text-xs); color: var(--vf-text-tertiary); margin-left: var(--vf-space-2); transition: opacity 0.3s; }
+
+/* ── Import modal (drop zone + preview table) ────────────────────────────── */
+
+.drop-zone {
+  border: 2px dashed var(--vf-border-default);
+  border-radius: var(--vf-radius-md);
+  padding: var(--vf-space-8) var(--vf-space-5);
+  text-align: center;
+  cursor: pointer;
+  color: var(--vf-text-secondary);
+  transition: border-color var(--vf-duration-base), background var(--vf-duration-base);
+  user-select: none;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--vf-brand-orange);
+  background: var(--vf-brand-orange-soft);
+}
+.drop-zone .drop-icon { font-size: 30px; margin-bottom: var(--vf-space-2); color: var(--vf-text-tertiary); }
+.drop-zone .drop-label { font-size: var(--vf-text-md); margin-bottom: var(--vf-space-1); color: var(--vf-text-primary); font-weight: var(--vf-weight-medium); }
+.drop-zone .drop-hint { font-size: var(--vf-text-sm); color: var(--vf-text-muted); }
+.modal.import-modal { width: 780px; }
+.import-preview {
+  margin-top: var(--vf-space-2);
+  max-height: 340px;
+  overflow-y: auto;
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-sm);
+}
+table.import-tbl { width: 100%; border-collapse: collapse; font-size: var(--vf-text-sm); }
+table.import-tbl th {
+  text-align: left;
+  padding: var(--vf-space-2) var(--vf-space-3);
+  color: var(--vf-text-tertiary);
+  font-weight: var(--vf-weight-medium);
+  font-size: var(--vf-text-xs);
+  border-bottom: 1px solid var(--vf-border-default);
+  background: var(--vf-surface-sunken);
+  position: sticky; top: 0;
+  text-transform: uppercase;
+  letter-spacing: var(--vf-tracking-wide);
+}
+table.import-tbl td { padding: var(--vf-space-2) var(--vf-space-3); border-bottom: 1px solid var(--vf-border-subtle); vertical-align: middle; }
+table.import-tbl tr:last-child td { border-bottom: none; }
+table.import-tbl tr:hover td { background: var(--vf-surface-hover); }
+.badge-new    { background: var(--vf-success-soft); color: var(--vf-success-text); }
+.badge-update { background: var(--vf-info-soft);    color: var(--vf-info-text); }
+.badge-same   { background: var(--vf-cat-gray-soft); color: var(--vf-cat-gray-strong); }
+.import-summary { font-size: var(--vf-text-sm); color: var(--vf-text-secondary); margin-bottom: var(--vf-space-2); }
+.import-changes { font-size: var(--vf-text-xs); color: var(--vf-text-tertiary); line-height: 1.5; margin-top: 2px; }
+.import-spinner { text-align: center; padding: var(--vf-space-8) var(--vf-space-4); color: var(--vf-text-secondary); font-size: var(--vf-text-md); }
+
+/* ── Login + admin console ───────────────────────────────────────────────── */
+
+.login-overlay {
+  position: fixed; inset: 0;
+  background: var(--vf-surface-sunken);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+}
+.login-box {
+  background: var(--vf-surface-raised);
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-md);
+  padding: var(--vf-space-8);
+  width: 380px;
+  max-width: 92vw;
+  text-align: center;
+  box-shadow: var(--vf-shadow-md);
+}
+.login-box h2 {
+  font-family: var(--vf-font-display);
+  font-size: var(--vf-text-2xl);
+  font-weight: var(--vf-weight-medium);
+  margin-bottom: var(--vf-space-1);
+  color: var(--vf-brand-navy);
+  text-transform: none;
+  letter-spacing: var(--vf-tracking-tight);
+}
+.login-box .login-sub { font-size: var(--vf-text-sm); color: var(--vf-text-secondary); margin-bottom: var(--vf-space-6); }
+.login-box .field { text-align: left; }
+.login-box .login-err { color: var(--vf-danger-text); font-size: var(--vf-text-sm); margin-bottom: var(--vf-space-2); min-height: 18px; }
+.login-box .btn-primary { width: 100%; height: 40px; font-size: var(--vf-text-md); }
+.user-badge { font-size: var(--vf-text-sm); color: var(--vf-text-secondary); display: flex; align-items: center; gap: var(--vf-space-2); }
+.user-badge .role-tag {
+  background: var(--vf-cat-purple-soft); color: var(--vf-cat-purple-strong);
+  border-radius: var(--vf-radius-pill); padding: 2px 10px;
+  font-size: var(--vf-text-xs); font-weight: var(--vf-weight-medium);
+  letter-spacing: var(--vf-tracking-wide);
+}
+.user-badge .logout-btn {
+  cursor: pointer; color: var(--vf-text-secondary);
+  text-decoration: underline; font-size: var(--vf-text-sm);
+  background: none; border: none; font-family: inherit;
+}
+.user-badge .logout-btn:hover { color: var(--vf-danger-text); }
+.admin-table { width: 100%; border-collapse: collapse; font-size: var(--vf-text-base); margin-top: var(--vf-space-3); }
+.admin-table th {
+  text-align: left; padding: var(--vf-space-2) var(--vf-space-3);
+  color: var(--vf-text-tertiary);
+  font-weight: var(--vf-weight-medium);
+  font-size: var(--vf-text-xs);
+  border-bottom: 1px solid var(--vf-border-default);
+  text-transform: uppercase;
+  letter-spacing: var(--vf-tracking-wide);
+}
+.admin-table td { padding: var(--vf-space-3); border-bottom: 1px solid var(--vf-border-subtle); vertical-align: middle; }
+.admin-table tr:hover td { background: var(--vf-surface-hover); }
+.role-admin    { background: var(--vf-danger-soft);   color: var(--vf-danger-text);   border-radius: var(--vf-radius-pill); padding: 2px 10px; font-size: var(--vf-text-xs); font-weight: var(--vf-weight-medium); letter-spacing: var(--vf-tracking-wide); }
+.role-operator { background: var(--vf-info-soft);     color: var(--vf-info-text);     border-radius: var(--vf-radius-pill); padding: 2px 10px; font-size: var(--vf-text-xs); font-weight: var(--vf-weight-medium); letter-spacing: var(--vf-tracking-wide); }
+.role-viewer   { background: var(--vf-cat-gray-soft); color: var(--vf-cat-gray-strong); border-radius: var(--vf-radius-pill); padding: 2px 10px; font-size: var(--vf-text-xs); font-weight: var(--vf-weight-medium); letter-spacing: var(--vf-tracking-wide); }
+
+/* ── MO Status page ──────────────────────────────────────────────────────── */
+
+.status-table { width: 100%; border-collapse: collapse; font-size: var(--vf-text-base); }
+.status-table th {
+  text-align: left; padding: var(--vf-space-2) var(--vf-space-3);
+  color: var(--vf-text-tertiary);
+  font-weight: var(--vf-weight-medium);
+  font-size: var(--vf-text-xs);
+  border-bottom: 1px solid var(--vf-border-default);
+  background: var(--vf-surface-sunken);
+  text-transform: uppercase;
+  letter-spacing: var(--vf-tracking-wide);
+  white-space: nowrap;
+}
+.status-table td { padding: var(--vf-space-3); border-bottom: 1px solid var(--vf-border-subtle); vertical-align: middle; }
+.status-table tr:last-child td { border-bottom: none; }
+.status-table tr:hover td { background: var(--vf-surface-hover); }
+.status-table .mo-id { font-family: var(--vf-font-mono); font-weight: var(--vf-weight-medium); font-size: var(--vf-text-sm); color: var(--vf-brand-navy); }
+.status-table .tbd-id { color: var(--vf-text-muted); font-style: italic; font-size: var(--vf-text-sm); }
+.progress-bar-wrap {
+  width: 90px; height: 6px;
+  background: var(--vf-surface-disabled);
+  border-radius: var(--vf-radius-pill);
+  overflow: hidden;
+  display: inline-block; vertical-align: middle; margin-right: var(--vf-space-2);
+}
+.progress-bar-fill { height: 100%; border-radius: var(--vf-radius-pill); background: var(--vf-success-base); transition: width var(--vf-duration-slow); }
+.progress-bar-fill.near { background: var(--vf-warning-base); }
+.progress-bar-fill.over { background: var(--vf-info-base); }
+.status-filters { display: flex; gap: var(--vf-space-2); flex-wrap: wrap; align-items: center; margin-bottom: var(--vf-space-4); }
+.status-filters input, .status-filters select {
+  height: 32px;
+  padding: 0 var(--vf-space-3);
+  font-size: var(--vf-text-md);
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-sm);
+  background: var(--vf-surface-raised);
+  color: var(--vf-text-primary);
+  font-family: inherit;
+}
+.status-filters input { width: 220px; }
+.status-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--vf-space-3); margin-bottom: var(--vf-space-5); }
+.no-inv-note {
+  background: var(--vf-warning-soft);
+  color: var(--vf-warning-text);
+  border-radius: var(--vf-radius-md);
+  padding: var(--vf-space-3) var(--vf-space-4);
+  font-size: var(--vf-text-sm);
+  margin-bottom: var(--vf-space-4);
+  border-left: 3px solid var(--vf-warning-base);
+}
+
+/* ── AI Chat Widget ──────────────────────────────────────────────────────── */
+
+#ai-widget { position: fixed; bottom: 24px; right: 24px; z-index: var(--vf-z-toast); display: flex; flex-direction: column; align-items: flex-end; gap: var(--vf-space-3); }
+#ai-fab {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: var(--vf-brand-orange);
+  color: var(--vf-text-inverse);
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--vf-shadow-md);
+  transition: transform var(--vf-duration-fast), background var(--vf-duration-fast);
+  flex-shrink: 0;
+}
+#ai-fab:hover { background: var(--vf-brand-orange-hover); transform: scale(1.06); }
+#ai-fab svg { width: 22px; height: 22px; }
+#ai-panel {
+  width: 360px;
+  background: var(--vf-surface-raised);
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-md);
+  box-shadow: var(--vf-shadow-lg);
+  display: flex; flex-direction: column;
+  max-height: 520px;
+  overflow: hidden;
+}
+.ai-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--vf-space-3) var(--vf-space-4);
+  border-bottom: 1px solid var(--vf-border-subtle);
+  flex-shrink: 0;
+  background: var(--vf-surface-sunken);
+}
+.ai-panel-title {
+  font-size: var(--vf-text-sm);
+  font-weight: var(--vf-weight-medium);
+  display: flex; align-items: center; gap: var(--vf-space-2);
+  color: var(--vf-brand-navy);
+  letter-spacing: var(--vf-tracking-tight);
+}
+.ai-panel-title .ai-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--vf-success-base); }
+.ai-close-btn { background: none; border: none; cursor: pointer; color: var(--vf-text-tertiary); font-size: 18px; line-height: 1; padding: 2px var(--vf-space-1); }
+.ai-close-btn:hover { color: var(--vf-text-primary); }
+#ai-messages { flex: 1; overflow-y: auto; padding: var(--vf-space-3) var(--vf-space-4); display: flex; flex-direction: column; gap: var(--vf-space-3); }
+.ai-msg { max-width: 88%; font-size: var(--vf-text-sm); line-height: var(--vf-leading-normal); }
+.ai-msg.user      { align-self: flex-end;   background: var(--vf-brand-orange); color: var(--vf-text-inverse); border-radius: var(--vf-radius-md) var(--vf-radius-md) 2px var(--vf-radius-md); padding: var(--vf-space-2) var(--vf-space-3); }
+.ai-msg.assistant { align-self: flex-start; background: var(--vf-surface-sunken);  color: var(--vf-text-primary); border-radius: var(--vf-radius-md) var(--vf-radius-md) var(--vf-radius-md) 2px; padding: var(--vf-space-2) var(--vf-space-3); white-space: pre-wrap; border-left: 2px solid var(--vf-brand-orange); }
+.ai-msg.error     { align-self: flex-start; background: var(--vf-danger-soft);     color: var(--vf-danger-text);  border-radius: var(--vf-radius-md); padding: var(--vf-space-2) var(--vf-space-3); }
+.ai-typing {
+  align-self: flex-start;
+  display: flex; gap: var(--vf-space-3); align-items: center;
+  padding: var(--vf-space-3) var(--vf-space-4);
+  background: var(--vf-surface-sunken);
+  border-radius: var(--vf-radius-md);
+  border-left: 2px solid var(--vf-brand-orange);
+  min-width: 200px;
+}
+.ai-typing-dots { display: flex; gap: var(--vf-space-1); flex-shrink: 0; }
+.ai-typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--vf-brand-orange); animation: ai-bounce 1.2s infinite ease-in-out; }
+.ai-typing span:nth-child(2) { animation-delay: 0.2s; }
+.ai-typing span:nth-child(3) { animation-delay: 0.4s; }
+.ai-typing-label { font-size: var(--vf-text-sm); color: var(--vf-brand-orange); animation: ai-label-fade 0.4s ease-in; font-weight: var(--vf-weight-medium); }
+@keyframes ai-bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
+@keyframes ai-label-fade { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } }
+#ai-fab.loading { animation: ai-fab-pulse 1.4s infinite ease-in-out; }
+@keyframes ai-fab-pulse { 0%, 100% { box-shadow: var(--vf-shadow-md); } 50% { box-shadow: 0 0 0 8px rgba(232, 119, 34, 0.15), var(--vf-shadow-lg); } }
+.ai-input-area {
+  border-top: 1px solid var(--vf-border-subtle);
+  padding: var(--vf-space-3);
+  display: flex; gap: var(--vf-space-2); align-items: flex-end;
+  flex-shrink: 0;
+  background: var(--vf-surface-sunken);
+}
+#ai-input {
+  flex: 1;
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-sm);
+  padding: var(--vf-space-2) var(--vf-space-3);
+  font-size: var(--vf-text-md);
+  font-family: inherit;
+  resize: none; max-height: 100px; overflow-y: auto;
+  color: var(--vf-text-primary);
+  background: var(--vf-surface-raised);
+}
+#ai-input:focus { outline: none; border-color: var(--vf-border-focus); box-shadow: var(--vf-shadow-focus); }
+#ai-send-btn {
+  flex-shrink: 0;
+  background: var(--vf-brand-orange);
+  color: var(--vf-text-inverse);
+  border: none;
+  border-radius: var(--vf-radius-sm);
+  padding: var(--vf-space-2) var(--vf-space-4);
+  font-size: var(--vf-text-md);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: var(--vf-weight-medium);
+  height: 32px;
+}
+#ai-send-btn:hover { background: var(--vf-brand-orange-hover); }
+#ai-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ai-empty { color: var(--vf-text-muted); font-size: var(--vf-text-sm); text-align: center; margin-top: var(--vf-space-8); line-height: var(--vf-leading-normal); }
+.ai-quick-btn {
+  background: var(--vf-surface-raised);
+  border: 1px solid var(--vf-border-default);
+  border-radius: var(--vf-radius-pill);
+  padding: 4px var(--vf-space-3);
+  font-size: var(--vf-text-xs);
+  cursor: pointer;
+  color: var(--vf-text-secondary);
+  font-family: inherit;
+  white-space: nowrap;
+  font-weight: var(--vf-weight-medium);
+}
+.ai-quick-btn:hover { background: var(--vf-surface-hover); color: var(--vf-text-primary); border-color: var(--vf-border-strong); }
+
+/* ── Top bar / brand strip ───────────────────────────────────────────────── */
+
+.vf-topbar {
+  height: var(--vf-topbar-height);
+  padding: 0 var(--vf-space-5);
+  background: var(--vf-surface-raised);
+  border-bottom: 1px solid var(--vf-border-default);
+  display: flex; align-items: center; gap: var(--vf-space-4);
+  margin: 0 calc(-1 * var(--vf-space-5));
+}
+.vf-topbar__brand {
+  font-family: var(--vf-font-display);
+  font-size: var(--vf-text-lg);
+  font-weight: var(--vf-weight-medium);
+  letter-spacing: var(--vf-tracking-tight);
+  color: var(--vf-brand-navy);
+  text-transform: none;
+}
+.vf-topbar__brand .brand-orange { color: var(--vf-brand-orange); }
+.vf-topbar__spacer { flex: 1; }
 </style>
 </head>
 <body>
@@ -227,20 +822,18 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
   </div>
 </div>
 
-<div class="app" style="max-width:1400px;margin:0 auto;padding:1.25rem 1rem;display:none;" id="main-app">
+<div class="app" style="display:none;" id="main-app">
 
-  <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1.25rem;padding-bottom:0.75rem;border-bottom:1px solid var(--color-border-tertiary);">
-    <div style="display:flex;align-items:baseline;gap:10px;">
-      <span style="font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#ff6600;">Production Planner</span>
-      <span style="font-size:11px;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:0.06em;">Voyage Foods</span>
+  <div class="vf-topbar">
+    <div class="vf-topbar__brand">
+      <span class="brand-orange">Voyage</span> Production Planner
     </div>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <span class="save-indicator" id="save-ind"></span>
-      <div class="user-badge" id="user-badge"></div>
-    </div>
+    <div class="vf-topbar__spacer"></div>
+    <span class="save-indicator" id="save-ind"></span>
+    <div class="user-badge" id="user-badge"></div>
   </div>
 
-  <div id="notice" class="notice" style="display:none;"></div>
+  <div id="notice" class="notice" style="display:none;margin-top:var(--vf-space-4);"></div>
 
   <div class="tabs">
     <button class="tab active" onclick="switchTab('calendar')">Calendar</button>
@@ -248,15 +841,26 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     <button class="tab" onclick="switchTab('capacity')">Capacity &amp; ops</button>
     <button class="tab" onclick="switchTab('traceability')">Traceability</button>
     <button class="tab" onclick="switchTab('mo-status')">MO Status</button>
+    <button class="tab" onclick="switchTab('live-inv')">Live Inventory</button>
+    <button class="tab" onclick="switchTab('mrp')" id="tab-mrp-btn" style="display:none;">MRP</button>
+    <button class="tab" onclick="switchTab('mrp-setup')" id="tab-mrp-setup-btn" style="display:none;">MRP Setup</button>
     <button class="tab" onclick="switchTab('admin')" id="tab-admin-btn" style="display:none;">Admin console</button>
   </div>
 
   <!-- CALENDAR -->
   <div id="tab-calendar">
     <div class="header">
-      <div style="display:flex;align-items:center;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <h2>4-week schedule</h2>
         <button class="btn btn-primary btn-sm" onclick="openModal()">+ New order</button>
+        <div style="position:relative;display:flex;align-items:center;gap:6px;margin-left:8px;">
+          <input id="cal-search" placeholder="Find MO or SKU…"
+            oninput="onCalSearchInput()"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();calSearchJump();} if(event.key==='Escape'){clearCalSearch();}"
+            style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:180px;height:28px;">
+          <span id="cal-search-count" style="font-size:11px;color:var(--vf-text-tertiary);min-width:80px;"></span>
+          <button class="btn btn-sm" id="cal-search-clear" onclick="clearCalSearch()" style="display:none;padding:0 8px;height:28px;">✕</button>
+        </div>
       </div>
       <div class="cal-nav">
         <button class="btn btn-sm" onclick="shiftCal(-1)">← Back</button>
@@ -266,10 +870,15 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
       </div>
     </div>
     <div class="legend">
-      <div class="legend-item"><div class="legend-dot" style="background:#4d8fd4;"></div>CBE liquor</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#27c068;"></div>CBS liquor</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#9b84ee;"></div>Finished chocolate</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#ff6600;"></div>Roasting</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--vf-cat-blue-base);"></div>CBE liquor</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--vf-cat-green-base);"></div>CBS liquor</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--vf-cat-purple-base);"></div>Finished chocolate</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--vf-cat-orange-base);"></div>Roasting / seed prep</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--vf-cat-teal-base);"></div>Other</div>
+      <div class="legend-item" style="margin-left:12px;border-left:1px solid var(--vf-border-default);padding-left:12px;">
+        <div style="width:10px;height:10px;border-left:3px dashed var(--vf-text-tertiary);"></div>
+        Tentative (◌ unconfirmed)
+      </div>
     </div>
     <div class="cal-wrap"><table class="cal-table" id="cal-table"></table></div>
   </div>
@@ -293,12 +902,12 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     <div class="machine-grid">
       <div class="machine-card cbs"><div class="tag tag-cbs">Non-tempering · CBS</div><div class="machine-name">East Mcintyre — 5,000 kg</div><div class="machine-detail">Min: <strong>2,250 kg</strong> / Max: <strong>4,300 kg</strong> · EU/US not mixed · Runtime: <strong>12 days</strong></div></div>
       <div class="machine-card cbe"><div class="tag tag-cbe">Tempering · CBE</div><div class="machine-name">West Mcintyre — 5,000 kg</div><div class="machine-detail">Min: <strong>2,250 kg</strong> / Max: <strong>4,300 kg</strong> · EU/US not mixed · Runtime: <strong>12 days</strong></div></div>
-      <div class="machine-card" style="opacity:0.6;"><div class="machine-name">1,250 kg Mcintyre</div><div class="machine-detail">Min: <strong>600 kg</strong> / Max: <strong>1,000 kg</strong> · Not in active scope</div></div>
+      <div class="machine-card"><div class="machine-name">1,250 kg Mcintyre</div><div class="machine-detail">Min: <strong>600 kg</strong> / Max: <strong>1,000 kg</strong> · Peanut-free spread making and small-scale product tests</div></div>
       <div class="machine-card"><div class="machine-name">5k Mac Packout</div><div class="machine-detail">25 kg BIB, 225 kg drums, 1 ton totes · ~10 day cycle</div></div>
     </div>
     <div class="zone-header">Zone 2 — Chocolate making</div>
     <div class="machine-grid">
-      <div class="machine-card"><div class="machine-name">Fat melter</div><div class="machine-detail"><strong>24 hr</strong> · Simultaneous with liquor melting for chocolate</div></div>
+      <div class="machine-card"><div class="machine-name">Fat melter</div><div class="machine-detail">CBS-based chocolate fat: <strong>72 hr</strong> · CBE-based chocolate fat: <strong>24 hr</strong> · Simultaneous with liquor melting</div></div>
       <div class="machine-card"><div class="machine-name">Mass line: Refining</div><div class="machine-detail">Min: <strong>500 kg</strong> / Max: <strong>1,500 kg</strong> per batch · Runtime: <strong>1 day</strong> · Max capacity: <strong>6,000 kg/day</strong> (4 × 1,500 kg batches)</div></div>
       <div class="machine-card"><div class="machine-name">Mass line: Conching</div><div class="machine-detail">Min: <strong>3,000 kg</strong> / Max: <strong>6,000 kg</strong> · Liquor melting 72 hr · Runtime: <strong>1 day</strong></div></div>
       <div class="machine-card"><div class="machine-name">Drops line: Pack out</div><div class="machine-detail">50 lb BIB, 25 kg BIB · Finished chocolate</div></div>
@@ -311,11 +920,11 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     <div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:500;margin-bottom:5px;">Finished chocolate (CBS or CBE)</div><div class="op-pipeline"><span class="op-chip-pre">Seed cleaning</span><span class="op-arrow">→</span><span class="op-chip">Roasting</span><span class="op-arrow">→</span><div class="parallel-group"><div class="parallel-label">simultaneous</div><span class="op-chip-parallel">Fat melting (24 hr)</span><span class="op-chip-parallel">Liquor melting (72 hr)</span></div><span class="op-arrow">→</span><span class="op-chip">Refining</span><span class="op-arrow">→</span><span class="op-chip">Conching</span><span class="op-arrow">→</span><span class="op-chip">Pack out</span></div></div>
     <hr class="divider">
     <div class="section-title">BOM rules</div>
-    <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.9;">
-      <div><strong style="color:var(--color-text-primary);">Liquor BOM:</strong> 70% roasted chocolate (DRGS) + 30% fat</div>
-      <div><strong style="color:var(--color-text-primary);">Fat type:</strong> CBS = non-tempering (East Mac) · CBE = tempering (West Mac)</div>
-      <div><strong style="color:var(--color-text-primary);">EU/US:</strong> Cannot be mixed on same batch</div>
-      <div><strong style="color:var(--color-text-primary);">Roasting yield:</strong> ~68–73%. First batch post-changeover may be scrap/QA hold.</div>
+    <div style="font-size:12px;color:var(--vf-text-secondary);line-height:1.9;">
+      <div><strong style="color:var(--vf-text-primary);">Liquor BOM:</strong> 70% roasted chocolate (DRGS) + 30% fat</div>
+      <div><strong style="color:var(--vf-text-primary);">Fat type:</strong> CBS = non-tempering (East Mac) · CBE = tempering (West Mac)</div>
+      <div><strong style="color:var(--vf-text-primary);">EU/US:</strong> Cannot be mixed on the same batch on the mass line (Refining / Conching / Depositing). Does not apply to the Mcintyres.</div>
+      <div><strong style="color:var(--vf-text-primary);">Roasting yield:</strong> ~68–73%. First batch post-changeover may be scrap/QA hold.</div>
     </div>
   </div>
 
@@ -329,8 +938,9 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     <div class="header">
       <h2>MO Status</h2>
       <div style="display:flex;align-items:center;gap:8px;">
-        <span id="cin7-sync-ts" style="font-size:11px;color:var(--color-text-tertiary);"></span>
-        <button class="btn btn-sm btn-primary" id="cin7-sync-btn" onclick="triggerCin7Sync()">⟳ Sync from Cin7</button>
+        <!-- Cin7 API sync removed — Cin7 deprecated /inventorymovements without a v2 replacement.
+             Inventory data is now loaded via the Inventory Movement Details report upload on the Traceability tab. -->
+        <span id="cin7-sync-ts" style="display:none;"></span>
         <button class="btn btn-sm" onclick="renderMOStatus()">↺ Refresh</button>
       </div>
     </div>
@@ -355,22 +965,283 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
     <div class="card" style="overflow:hidden;">
       <div style="overflow-x:auto;">
         <table class="status-table">
-          <thead>
+          <thead id="mo-status-thead">
             <tr>
-              <th>MO #</th>
-              <th>SKU / Product</th>
-              <th>Machine</th>
-              <th>Start → End</th>
-              <th style="text-align:right;">Planned qty</th>
-              <th style="text-align:right;">Actual in</th>
-              <th>Progress</th>
-              <th>Status</th>
-              <th>Tracking</th>
+              <th class="mo-status-sort" data-key="mo"       onclick="sortMoStatus('mo')"      style="cursor:pointer;user-select:none;">MO # <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="sku"      onclick="sortMoStatus('sku')"     style="cursor:pointer;user-select:none;">SKU / Product <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="machine"  onclick="sortMoStatus('machine')" style="cursor:pointer;user-select:none;">Machine <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="dates"    onclick="sortMoStatus('dates')"   style="cursor:pointer;user-select:none;">Start → End <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="planned"  onclick="sortMoStatus('planned')" style="cursor:pointer;user-select:none;text-align:right;">Planned qty <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="actual"   onclick="sortMoStatus('actual')"  style="cursor:pointer;user-select:none;text-align:right;">Actual in <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="pct"      onclick="sortMoStatus('pct')"     style="cursor:pointer;user-select:none;">Progress <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="status"   onclick="sortMoStatus('status')"  style="cursor:pointer;user-select:none;">Status <span class="sort-arrow"></span></th>
+              <th class="mo-status-sort" data-key="tracking" onclick="sortMoStatus('tracking')" style="cursor:pointer;user-select:none;">Tracking <span class="sort-arrow"></span></th>
             </tr>
           </thead>
           <tbody id="mo-status-tbody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- LIVE INVENTORY (on-hand from Cin7 ProductAvailability API) -->
+  <div id="tab-live-inv" style="display:none;">
+    <div class="header">
+      <div style="display:flex;align-items:center;gap:var(--vf-space-3);flex-wrap:wrap;">
+        <h2>Live Inventory</h2>
+        <span id="live-inv-ts" style="font-size:var(--vf-text-sm);color:var(--vf-text-tertiary);"></span>
+      </div>
+      <div style="display:flex;gap:var(--vf-space-2);align-items:center;">
+        <button class="btn btn-sm" id="live-inv-sync-btn" onclick="syncLiveInventory()" style="display:none;">⟳ Sync from Cin7</button>
+      </div>
+    </div>
+
+    <div class="status-summary" id="live-inv-kpis"></div>
+
+    <div class="status-filters">
+      <input id="live-inv-search" placeholder="Search SKU or product…" oninput="renderLiveInventory()">
+      <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+        <input type="checkbox" id="live-inv-aggregate" checked onchange="renderLiveInventory()" style="margin:0;"/>
+        Aggregate by SKU
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+        <input type="checkbox" id="live-inv-hide-zero" checked onchange="renderLiveInventory()" style="margin:0;"/>
+        Hide zero on-hand
+      </label>
+    </div>
+
+    <div id="live-inv-empty" class="no-inv-note" style="display:none;">
+      No on-hand snapshot loaded yet. An admin can click "⟳ Sync from Cin7" to pull the current state, or wait for the nightly sync at 06:30 UTC.
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table class="status-table" id="live-inv-table">
+        <thead id="live-inv-thead"></thead>
+        <tbody id="live-inv-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MRP — operator+ — production-plan-driven material requirements -->
+  <div id="tab-mrp" style="display:none;">
+    <div class="header">
+      <div style="display:flex;align-items:center;gap:var(--vf-space-3);flex-wrap:wrap;">
+        <h2>MRP</h2>
+        <span style="font-size:var(--vf-text-sm);color:var(--vf-text-tertiary);">Production plan × BOMs × on-hand → suggested POs and at-risk MOs</span>
+      </div>
+      <div style="display:flex;gap:var(--vf-space-2);align-items:center;">
+        <span id="mrp-run-ts" style="font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);"></span>
+        <button class="btn btn-sm btn-primary" onclick="runMrp()">↻ Run MRP</button>
+      </div>
+    </div>
+
+    <div style="background:var(--vf-surface-sunken);border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);padding:var(--vf-space-3) var(--vf-space-4);margin-bottom:var(--vf-space-4);">
+      <div style="display:flex;gap:var(--vf-space-4);align-items:center;flex-wrap:wrap;">
+        <strong style="font-size:var(--vf-text-sm);">Settings:</strong>
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          <input type="checkbox" id="mrp-include-unconfirmed" style="margin:0;"/>
+          Include unconfirmed orders
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          <input type="checkbox" id="mrp-apply-wastage" checked style="margin:0;"/>
+          Apply wastage %
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          Horizon (days):
+          <input type="number" id="mrp-horizon-days" min="7" max="365" value="120" style="width:70px;padding:4px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+        </label>
+      </div>
+    </div>
+
+    <div class="status-summary" id="mrp-kpis"></div>
+
+    <div id="mrp-empty" class="no-inv-note" style="display:none;">
+      No MRP run yet. Click "↻ Run MRP" above to compute requirements against the current production plan, BOMs, and on-hand inventory.
+    </div>
+
+    <div id="mrp-results" style="display:none;">
+      <!-- Sub-section selector -->
+      <div style="display:flex;gap:var(--vf-space-2);margin-bottom:var(--vf-space-4);border-bottom:1px solid var(--vf-border-default);">
+        <button class="btn btn-sm" id="mrp-tab-pos"     onclick="switchMrpSection('pos')"     style="border-radius:0;border-bottom:2px solid var(--vf-brand-orange);">Suggested POs</button>
+        <button class="btn btn-sm" id="mrp-tab-risk"    onclick="switchMrpSection('risk')"    style="border-radius:0;background:transparent;">At-risk MOs</button>
+        <button class="btn btn-sm" id="mrp-tab-skus"    onclick="switchMrpSection('skus')"    style="border-radius:0;background:transparent;">All SKUs</button>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+          <button class="btn btn-sm" onclick="exportMrpCsv()">↓ Export POs CSV</button>
+        </span>
+      </div>
+
+      <!-- Suggested POs sub-view -->
+      <div id="mrp-section-pos">
+        <div class="status-filters">
+          <input id="mrp-po-search" placeholder="Search SKU…" oninput="renderMrp()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:220px;height:32px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+            <input type="checkbox" id="mrp-po-overdue-only" onchange="renderMrp()" style="margin:0;"/>
+            Overdue only
+          </label>
+        </div>
+        <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);">
+          <table class="status-table" id="mrp-po-table" style="margin-top:0;">
+            <thead><tr><th>SKU</th><th>Name</th><th style="text-align:right;">Qty to order</th><th>Lead time</th><th>Order by</th><th>Earliest need</th><th>Source</th></tr></thead>
+            <tbody id="mrp-po-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- At-risk MOs sub-view -->
+      <div id="mrp-section-risk" style="display:none;">
+        <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);">
+          <table class="status-table" id="mrp-risk-table" style="margin-top:0;">
+            <thead><tr><th>MO / Order</th><th>FG SKU</th><th style="text-align:right;">Planned</th><th>Earliest shortage</th><th style="text-align:right;">Total short (kg)</th><th>RMs short</th></tr></thead>
+            <tbody id="mrp-risk-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- All SKUs sub-view (drill-down) -->
+      <div id="mrp-section-skus" style="display:none;">
+        <div class="status-filters">
+          <input id="mrp-sku-search" placeholder="Search SKU…" oninput="renderMrp()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:220px;height:32px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+            <input type="checkbox" id="mrp-sku-short-only" onchange="renderMrp()" style="margin:0;"/>
+            Shortfall only
+          </label>
+        </div>
+        <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);">
+          <table class="status-table" id="mrp-sku-table" style="margin-top:0;">
+            <thead><tr><th>SKU</th><th style="text-align:right;">On hand</th><th style="text-align:right;">On order</th><th style="text-align:right;">In transit</th><th style="text-align:right;">Total demand</th><th style="text-align:right;">Total short</th><th>Lead time</th></tr></thead>
+            <tbody id="mrp-sku-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MRP SETUP (admin-only) — BOMs, lead times, safety stock for the MRP feature -->
+  <div id="tab-mrp-setup" style="display:none;">
+    <div class="header">
+      <h2>MRP Setup</h2>
+      <span style="font-size:var(--vf-text-sm);color:var(--vf-text-tertiary);">BOMs · Supply settings · Recursive expand</span>
+    </div>
+
+    <div class="status-summary" id="mrp-setup-kpis"></div>
+
+    <!-- Sub-section selector -->
+    <div style="display:flex;gap:var(--vf-space-2);margin-bottom:var(--vf-space-4);border-bottom:1px solid var(--vf-border-default);">
+      <button class="btn btn-sm" id="mrp-tab-boms"     onclick="switchMrpSetupSection('boms')"     style="border-radius:0;border-bottom:2px solid var(--vf-brand-orange);">BOMs</button>
+      <button class="btn btn-sm" id="mrp-tab-supply"   onclick="switchMrpSetupSection('supply')"   style="border-radius:0;background:transparent;">Supply settings</button>
+      <button class="btn btn-sm" id="mrp-tab-expand"   onclick="switchMrpSetupSection('expand')"   style="border-radius:0;background:transparent;">Test expand</button>
+    </div>
+
+    <!-- BOMs sub-view -->
+    <div id="mrp-section-boms">
+      <div class="status-filters">
+        <input id="mrp-bom-search" placeholder="Search SKU or name…" oninput="renderMrpBoms()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:220px;height:32px;">
+        <select id="mrp-bom-machine-filter" onchange="renderMrpBoms()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;height:32px;">
+          <option value="">All machines</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          <input type="checkbox" id="mrp-bom-unmapped-only" onchange="renderMrpBoms()" style="margin:0;"/>
+          Unmapped machines only
+        </label>
+      </div>
+      <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);max-height:600px;overflow-y:auto;">
+        <table class="status-table" id="mrp-bom-table" style="margin-top:0;">
+          <thead style="position:sticky;top:0;background:var(--vf-surface-sunken);z-index:1;">
+            <tr><th>Parent SKU</th><th>Name</th><th>Versions</th><th>Default machine</th><th>Lead (d)</th><th>Components</th><th>QtyToProduce</th></tr>
+          </thead>
+          <tbody id="mrp-bom-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Supply settings sub-view (editable) -->
+    <div id="mrp-section-supply" style="display:none;">
+      <!-- Defaults editor -->
+      <div style="background:var(--vf-surface-sunken);border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);padding:var(--vf-space-3) var(--vf-space-4);margin-bottom:var(--vf-space-4);">
+        <div style="display:flex;align-items:center;gap:var(--vf-space-3);flex-wrap:wrap;">
+          <strong style="font-size:var(--vf-text-sm);color:var(--vf-text-primary);">Global defaults</strong>
+          <span style="font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">applied to any SKU not explicitly listed below</span>
+          <span id="mrp-supply-save-ind" style="margin-left:auto;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);"></span>
+        </div>
+        <div style="display:flex;gap:var(--vf-space-4);margin-top:var(--vf-space-2);flex-wrap:wrap;">
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Default lead time (days)
+            <input type="number" id="mrp-default-lead" min="0" onchange="saveMrpSupply()" style="width:90px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Safety stock (days of forward demand)
+            <input type="number" id="mrp-default-safety" min="0" onchange="saveMrpSupply()" style="width:90px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Packaging blanks default (days)
+            <input type="number" id="mrp-default-pack" min="0" onchange="saveMrpSupply()" style="width:90px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+        </div>
+      </div>
+
+      <!-- Filter strip + Add SKU -->
+      <div class="status-filters">
+        <input id="mrp-supply-search" placeholder="Search SKU or name…" oninput="renderMrpSupply()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:220px;height:32px;">
+        <select id="mrp-supply-source-filter" onchange="renderMrpSupply()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;height:32px;">
+          <option value="">All</option>
+          <option value="explicit">Explicit</option>
+          <option value="alias">Alias</option>
+          <option value="contract">Contract</option>
+        </select>
+        <span style="margin-left:auto;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">Click any cell to edit · changes auto-save</span>
+        <button class="btn btn-sm btn-primary" onclick="openAddSkuRow()">+ Add SKU</button>
+      </div>
+
+      <!-- Inline-add row (hidden by default) -->
+      <div id="mrp-add-sku-row" style="display:none;background:var(--vf-brand-orange-soft);border:1px solid var(--vf-brand-orange);border-radius:var(--vf-radius-md);padding:var(--vf-space-3);margin-bottom:var(--vf-space-3);">
+        <div style="display:flex;gap:var(--vf-space-2);align-items:flex-end;flex-wrap:wrap;">
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            SKU
+            <input type="text" id="mrp-new-sku" placeholder="RM-xxx-00 / PK-xxx-00 / FG-FL-..." style="width:240px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Lead time (days)
+            <input type="number" id="mrp-new-lead" min="0" placeholder="30" style="width:90px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Source
+            <select id="mrp-new-source" style="padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;height:30px;">
+              <option value="explicit">Explicit lead time</option>
+              <option value="contract">Contract (no PO suggestions)</option>
+              <option value="alias">Alias (point at another SKU)</option>
+            </select>
+          </label>
+          <label id="mrp-new-alias-wrap" style="display:none;flex-direction:column;gap:2px;font-size:var(--vf-text-xs);color:var(--vf-text-tertiary);">
+            Alias of (SKU)
+            <input type="text" id="mrp-new-alias" placeholder="RM-xxx-00" style="width:160px;padding:5px 8px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+          </label>
+          <button class="btn btn-sm btn-primary" onclick="confirmAddSku()">Add</button>
+          <button class="btn btn-sm" onclick="document.getElementById('mrp-add-sku-row').style.display='none';">Cancel</button>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);max-height:600px;overflow-y:auto;">
+        <table class="status-table" id="mrp-supply-table" style="margin-top:0;">
+          <thead style="position:sticky;top:0;background:var(--vf-surface-sunken);z-index:1;">
+            <tr><th>SKU</th><th style="text-align:right;">Lead time (days)</th><th>Source</th><th>Notes</th><th></th></tr>
+          </thead>
+          <tbody id="mrp-supply-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Expand test sub-view -->
+    <div id="mrp-section-expand" style="display:none;">
+      <div class="status-filters">
+        <input id="mrp-expand-sku" placeholder="Parent SKU (e.g. FG-860-006-01-EU)" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:280px;height:32px;">
+        <input id="mrp-expand-qty" type="number" placeholder="Qty" min="1" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:120px;height:32px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:var(--vf-text-sm);color:var(--vf-text-secondary);">
+          <input type="checkbox" id="mrp-expand-wastage" checked style="margin:0;"/>
+          Apply wastage %
+        </label>
+        <button class="btn btn-sm btn-primary" onclick="runMrpExpand()">Expand</button>
+      </div>
+      <div id="mrp-expand-result"></div>
     </div>
   </div>
 
@@ -380,8 +1251,8 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
       <h2>Admin Console — User Management</h2>
       <button class="btn btn-primary" onclick="openUserModal()">+ New user</button>
     </div>
-    <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md,8px);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--color-text-secondary);">
-      <strong style="color:var(--color-text-primary);">Roles:</strong>
+    <div style="background:var(--vf-surface-sunken);border-radius:var(--vf-radius-md);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--vf-text-secondary);">
+      <strong style="color:var(--vf-text-primary);">Roles:</strong>
       <span class="role-admin" style="margin-left:6px;">Admin</span> Full access + user management
       <span class="role-operator" style="margin-left:10px;">Operator</span> Create & edit orders
       <span class="role-viewer" style="margin-left:10px;">Viewer</span> Read-only access
@@ -390,6 +1261,34 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
       <thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
       <tbody id="admin-user-body"></tbody>
     </table>
+
+    <h2 style="margin-top:32px;">Audit Log — Order Changes</h2>
+    <div style="display:flex;gap:var(--vf-space-2);align-items:center;margin:var(--vf-space-3) 0;flex-wrap:wrap;">
+      <input id="audit-search" placeholder="Filter by MO, user, or field…" oninput="renderAuditLog()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;width:280px;height:32px;">
+      <select id="audit-source-filter" onchange="renderAuditLog()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;height:32px;">
+        <option value="">All sources</option>
+        <option value="manual">Manual</option>
+        <option value="auto-promote">Auto-promote</option>
+        <option value="excel-import">Excel import</option>
+        <option value="seed">Seed</option>
+      </select>
+      <select id="audit-action-filter" onchange="renderAuditLog()" style="padding:5px 10px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;height:32px;">
+        <option value="">All actions</option>
+        <option value="create">Create</option>
+        <option value="update">Update</option>
+        <option value="delete">Delete</option>
+      </select>
+      <span id="audit-count" style="font-size:11px;color:var(--vf-text-tertiary);margin-left:auto;"></span>
+      <button class="btn btn-sm" onclick="loadAuditLog()">↺ Refresh</button>
+    </div>
+    <div style="overflow-x:auto;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-md);max-height:600px;overflow-y:auto;">
+      <table class="admin-table" id="audit-log-table" style="margin-top:0;">
+        <thead style="position:sticky;top:0;background:var(--vf-surface-sunken);z-index:1;">
+          <tr><th>When</th><th>User</th><th>Source</th><th>Action</th><th>MO / Order</th><th>What changed</th></tr>
+        </thead>
+        <tbody id="audit-log-body"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -399,8 +1298,22 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
 <div class="modal" style="width:400px;">
   <h2 id="um-title">New user</h2>
   <div class="field"><label>Username</label><input id="um-user" placeholder="Enter username"/></div>
-  <div class="field"><label>Password</label><input id="um-pass" type="password" placeholder="Enter password"/></div>
-  <div class="field"><label>Confirm password</label><input id="um-pass2" type="password" placeholder="Re-enter password"/></div>
+  <div class="field"><label>Password</label>
+    <div class="pw-wrap">
+      <input id="um-pass" type="password" placeholder="Enter password"/>
+      <button type="button" class="pw-toggle" onclick="togglePwReveal('um-pass', this)" title="Show password" aria-label="Show password">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="field"><label>Confirm password</label>
+    <div class="pw-wrap">
+      <input id="um-pass2" type="password" placeholder="Re-enter password"/>
+      <button type="button" class="pw-toggle" onclick="togglePwReveal('um-pass2', this)" title="Show password" aria-label="Show password">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+  </div>
   <div class="field"><label>Role</label>
     <select id="um-role">
       <option value="viewer">Viewer — Read-only</option>
@@ -482,7 +1395,7 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
   <div class="row3">
     <div class="field"><label>Batch qty (kg)</label><input id="f-qty" type="number" min="1" oninput="calcBOM()"/></div>
     <div class="field"><label>No. of batches</label><input id="f-batches" type="number" min="1" value="1" oninput="calcBOM()"/></div>
-    <div class="field"><label>Total (kg)</label><input id="f-total" readonly style="background:var(--color-background-secondary);"/></div>
+    <div class="field"><label>Total (kg)</label><input id="f-total" readonly style="background:var(--vf-surface-sunken);"/></div>
   </div>
   <div id="bom-box" style="display:none;"></div>
   <div class="section-title">Planning</div>
@@ -494,9 +1407,21 @@ table.import-tbl tr:hover td{background:var(--color-background-secondary);}
       <select id="f-priority"><option value="low">Low</option><option value="med">Medium</option><option value="high">High</option></select>
     </div>
   </div>
+  <div class="field" style="display:flex;align-items:center;gap:var(--vf-space-2);padding:var(--vf-space-2) var(--vf-space-3);background:var(--vf-surface-sunken);border-radius:var(--vf-radius-sm);border-left:3px solid var(--vf-brand-orange);margin-bottom:var(--vf-space-3);">
+    <input type="checkbox" id="f-confirmed" style="margin:0;width:16px;height:16px;cursor:pointer;">
+    <label for="f-confirmed" style="margin:0;text-transform:none;letter-spacing:0;font-size:var(--vf-text-md);color:var(--vf-text-primary);cursor:pointer;">
+      <strong>Confirmed</strong> for production
+      <span style="display:block;font-size:11px;color:var(--vf-text-tertiary);font-weight:400;">When unchecked, MRP will only consume materials for this order if "include unconfirmed" is enabled.</span>
+    </label>
+  </div>
+  <div class="field"><label>Actual produced (kg) — leave blank if unknown</label>
+    <input id="f-actual-qty" type="number" min="0" step="any" placeholder="Pulled from Cin7 inventory if blank">
+    <div style="font-size:11px;color:var(--vf-text-tertiary);margin-top:3px;">Use when actual production differs from the plan (e.g. abandoned mid-run). Wins over inventory-derived totals in calendar / work orders / MO Status displays.</div>
+  </div>
   <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Special instructions, MO notes..."></textarea></div>
-  <div class="field"><label>Shiaocatjam</label><input id="f-shiaocatjam" type="text" placeholder=""/></div>
   <div class="modal-actions">
+    <button class="btn btn-danger" id="f-delete-btn" onclick="deleteCurrent()" style="margin-right:auto;display:none;">Delete</button>
+    <button class="btn" id="f-toggle-complete-btn" onclick="toggleComplete()" style="display:none;"></button>
     <button class="btn" onclick="closeModal()">Cancel</button>
     <button class="btn btn-primary" onclick="saveOrder()">Save order</button>
   </div>
@@ -561,6 +1486,24 @@ function hashPassword(pw){
   return 'h_'+Math.abs(h).toString(36)+'_'+pw.length;
 }
 
+const PW_EYE_OPEN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const PW_EYE_OFF ='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function togglePwReveal(inputId, btn){
+  const el=document.getElementById(inputId);
+  if(!el)return;
+  if(el.type==='password'){
+    el.type='text';
+    btn.title='Hide password';
+    btn.setAttribute('aria-label','Hide password');
+    btn.innerHTML=PW_EYE_OFF;
+  }else{
+    el.type='password';
+    btn.title='Show password';
+    btn.setAttribute('aria-label','Show password');
+    btn.innerHTML=PW_EYE_OPEN;
+  }
+}
+
 async function serverGet(key){
   try{
     const r=await fetch('/api/data/'+key);
@@ -569,9 +1512,10 @@ async function serverGet(key){
     return j.exists?j.value:null;
   }catch(e){return null;}
 }
-async function serverPut(key,value){
+async function serverPut(key,value,extra){
   try{
-    const r=await fetch('/api/data/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({value})});
+    const body = Object.assign({value}, extra || {});
+    const r=await fetch('/api/data/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     return r.ok;
   }catch(e){return false;}
 }
@@ -588,7 +1532,7 @@ async function loadUsers(){
     }
   }catch(e){users=[];}
   if(!users.length){
-    users=[{id:'master',username:'admin',password:hashPassword('admin123'),role:'admin',created:'2026-01-01'}];
+    users=[{id:'master',username:'productionadmin',password:hashPassword('productionadmin1800'),role:'admin',created:'2026-01-01'}];
     await persistUsers();
   }
 }
@@ -602,35 +1546,47 @@ async function persistUsers(){
   }catch(e){}
 }
 
-function doLogin(){
+async function doLogin(){
   const uEl=document.getElementById('login-user'),pEl=document.getElementById('login-pass');
-  const username=uEl.value.trim().toLowerCase(),password=pEl.value;
-  if(!username||!password){document.getElementById('login-err').textContent='Please enter username and password.';return;}
-  const user=users.find(u=>u.username.toLowerCase()===username&&u.password===hashPassword(password));
-  if(!user){document.getElementById('login-err').textContent='Invalid username or password.';return;}
-  currentUser=user;
-  try{sessionStorage.setItem('vf_session',JSON.stringify({id:user.id,username:user.username,role:user.role}));}catch(e){}
-  showApp();
+  const errEl=document.getElementById('login-err');
+  const username=uEl.value.trim(),password=pEl.value;
+  if(!username||!password){errEl.textContent='Please enter username and password.';return;}
+  errEl.textContent='Signing in…';
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+    if(!r.ok){
+      const j=await r.json().catch(()=>({}));
+      errEl.textContent=j.error||'Invalid username or password.';
+      return;
+    }
+    const j=await r.json();
+    await loadUsers();
+    currentUser=users.find(u=>u.id===j.user.id)||j.user;
+    errEl.textContent='';
+    showApp();
+  }catch(e){
+    errEl.textContent='Could not reach server. Try again.';
+  }
 }
-function doLogout(){
+async function doLogout(){
+  try{await fetch('/api/logout',{method:'POST'});}catch(e){}
   currentUser=null;
-  try{sessionStorage.removeItem('vf_session');}catch(e){}
   document.getElementById('main-app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('login-user').value='';
   document.getElementById('login-pass').value='';
   document.getElementById('login-err').textContent='';
 }
-function tryResumeSession(){
+async function tryResumeSession(){
   try{
-    const s=sessionStorage.getItem('vf_session');
-    if(s){
-      const sess=JSON.parse(s);
-      const user=users.find(u=>u.id===sess.id);
-      if(user){currentUser=user;showApp();return true;}
-    }
-  }catch(e){}
-  return false;
+    const r=await fetch('/api/me');
+    if(!r.ok)return false;
+    const j=await r.json();
+    await loadUsers();
+    currentUser=users.find(u=>u.id===j.user.id)||j.user;
+    showApp();
+    return true;
+  }catch(e){return false;}
 }
 
 function showApp(){
@@ -639,6 +1595,10 @@ function showApp(){
   window.currentUser=currentUser;
   const isAdmin=currentUser.role==='admin';
   document.getElementById('tab-admin-btn').style.display=isAdmin?'':'none';
+  document.getElementById('tab-mrp-setup-btn').style.display=isAdmin?'':'none';
+  // MRP tab visible to admin + operator (anyone who can act on PO suggestions)
+  const canSeeMrp = currentUser.role === 'admin' || currentUser.role === 'operator';
+  document.getElementById('tab-mrp-btn').style.display = canSeeMrp ? '' : 'none';
   document.getElementById('user-badge').innerHTML=
     `<span>${currentUser.username}</span>`+
     `<span class="role-tag">${currentUser.role}</span>`+
@@ -663,9 +1623,9 @@ function renderUsers(){
   const body=document.getElementById('admin-user-body');
   if(!body)return;
   body.innerHTML=users.map(u=>`<tr>
-    <td style="font-weight:500;">${esc(u.username)}${u.id==='master'?' <span style="font-size:10px;color:var(--color-text-tertiary);">(master)</span>':''}</td>
+    <td style="font-weight:500;">${esc(u.username)}${u.id==='master'?' <span style="font-size:10px;color:var(--vf-text-tertiary);">(master)</span>':''}</td>
     <td><span class="role-${esc(u.role)}">${esc(u.role.charAt(0).toUpperCase()+u.role.slice(1))}</span></td>
-    <td style="font-size:12px;color:var(--color-text-secondary);">${esc(u.created)||'—'}</td>
+    <td style="font-size:12px;color:var(--vf-text-secondary);">${esc(u.created)||'—'}</td>
     <td>
       <button class="btn btn-sm" onclick="openUserModal('${u.id}')">Edit</button>
       ${u.id!=='master'?`<button class="btn btn-sm btn-danger" style="margin-left:4px;" onclick="deleteUser('${u.id}')">Delete</button>`:''}
@@ -682,6 +1642,13 @@ function openUserModal(userId){
   document.getElementById('um-role').value='viewer';
   document.getElementById('um-err').textContent='';
   document.getElementById('um-user').disabled=false;
+  // Reset password reveal toggles to hidden state
+  ['um-pass','um-pass2'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.type='password';
+    const btn=el&&el.parentElement.querySelector('.pw-toggle');
+    if(btn){btn.title='Show password';btn.setAttribute('aria-label','Show password');btn.innerHTML=PW_EYE_OPEN;}
+  });
   if(userId){
     const u=users.find(x=>x.id===userId);
     if(!u)return;
@@ -737,13 +1704,81 @@ function deleteUser(id){
   persistUsers();renderUsers();
 }
 
+// ── Audit Log (admin console) ────────────────────────────────────────────────
+//
+// Pulls the most recent vf_orders changes from /api/audit-log and renders them
+// in a sortable table. Server caps the log at 5000 entries, evicting oldest.
+
+let auditEntries = [];
+async function loadAuditLog(){
+  try {
+    const r = await fetch('/api/audit-log');
+    if (!r.ok) { auditEntries = []; renderAuditLog(); return; }
+    const j = await r.json();
+    auditEntries = j.entries || [];
+  } catch (e) { auditEntries = []; }
+  renderAuditLog();
+}
+function renderAuditLog(){
+  const search = (document.getElementById('audit-search').value || '').toLowerCase();
+  const sourceFilter = document.getElementById('audit-source-filter').value;
+  const actionFilter = document.getElementById('audit-action-filter').value;
+  const filtered = auditEntries.filter(e => {
+    if (sourceFilter && e.source !== sourceFilter) return false;
+    if (actionFilter && e.action !== actionFilter) return false;
+    if (search) {
+      const hay = ((e.orderId||'') + ' ' + (e.userName||'') + ' ' + Object.keys(e.changes||{}).join(' ')).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+  document.getElementById('audit-count').textContent = `${filtered.length.toLocaleString()} of ${auditEntries.length.toLocaleString()} entries`;
+  const sourceBadge = src => {
+    const s = src || 'manual';
+    const colorMap = { 'manual':'var(--vf-cat-gray-base)', 'auto-promote':'var(--vf-info-base)', 'excel-import':'var(--vf-cat-purple-base)', 'seed':'var(--vf-cat-orange-base)' };
+    return `<span class="badge" style="background:transparent;border:1px solid ${colorMap[s]||'var(--vf-cat-gray-base)'};color:${colorMap[s]||'var(--vf-text-secondary)'};">${esc(s)}</span>`;
+  };
+  const actionBadge = a => {
+    const map = { 'create':'badge-complete', 'update':'badge-in-progress', 'delete':'badge-high' };
+    return `<span class="badge ${map[a]||'badge-queued'}">${esc(a)}</span>`;
+  };
+  const fmtChanges = e => {
+    if (e.action === 'create' || e.action === 'delete') {
+      const snap = e.snapshot || {};
+      const summary = `${snap.machine||'—'} · ${snap.qty||0} kg · ${snap.start||'?'}→${snap.end||'?'} · ${snap.status||'?'}`;
+      return `<span style="font-size:11px;color:var(--vf-text-secondary);">${esc(summary)}</span>`;
+    }
+    if (!e.changes) return '<span style="color:var(--vf-text-tertiary);">—</span>';
+    const parts = Object.entries(e.changes).map(([f,c]) => {
+      const from = c.from === null || c.from === undefined ? '∅' : String(c.from);
+      const to   = c.to   === null || c.to   === undefined ? '∅' : String(c.to);
+      return `<div style="font-size:11px;line-height:1.5;"><strong>${esc(f)}</strong>: <span style="color:var(--vf-text-tertiary);text-decoration:line-through;">${esc(from.slice(0,40))}</span> → <span style="color:var(--vf-text-primary);">${esc(to.slice(0,40))}</span></div>`;
+    });
+    return parts.join('');
+  };
+  document.getElementById('audit-log-body').innerHTML = filtered.length === 0
+    ? `<tr><td colspan="6" class="empty">No matching audit entries.</td></tr>`
+    : filtered.map(e => {
+        const d = new Date(e.ts);
+        const when = `${d.toLocaleDateString()}<br/><span style="font-size:10px;color:var(--vf-text-tertiary);">${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>`;
+        return `<tr>
+          <td style="font-size:11px;white-space:nowrap;">${when}</td>
+          <td style="font-size:12px;">${esc(e.userName||'—')}</td>
+          <td>${sourceBadge(e.source)}</td>
+          <td>${actionBadge(e.action)}</td>
+          <td><span class="mo-id">${esc(e.orderId||e.entityId||'—')}</span></td>
+          <td style="max-width:520px;">${fmtChanges(e)}</td>
+        </tr>`;
+      }).join('');
+}
+
 const SUBTYPES={coffee:[{v:'coffee_beans',l:'Roast beans'},{v:'coffee_ground',l:'Roast & ground'}],liquor:[{v:'liquor',l:'Chocolate liquor'}],chocolate:[{v:'chocolate',l:'Finished chocolate'}]};
 const BATCH_C={coffee_beans:{fixed:325},coffee_ground:{fixed:1000},liquor:{min:2250,max:4300},chocolate:{min:3000,max:6000}};
 const PROD_LABELS={coffee_beans:'Coffee — Roast beans',coffee_ground:'Coffee — Roast & ground',liquor:'Chocolate liquor',chocolate:'Finished chocolate'};
 const ZONES=[
   {label:'Zone 1 — Seed prep & roasting',machines:[{key:'seed_clean',label:'Seed cleaning'},{key:'roaster',label:'Roaster'}]},
   {label:'Zone 1 — Mcintyres',machines:[{key:'east_mac',label:'East Mac (CBS)'},{key:'west_mac',label:'West Mac (CBE)'},{key:'mac_1250',label:'1250 Mac'},{key:'mac_packout',label:'Mac Packout'},{key:'pouching',label:'Pouching'}]},
-  {label:'Zone 2 — Chocolate',machines:[{key:'fat_melter',label:'Fat melter'},{key:'refining',label:'Refining'},{key:'conching',label:'Conching'},{key:'depositing',label:'Pack out'}]}
+  {label:'Zone 2 — Chocolate',machines:[{key:'fat_melter',label:'Fat melter'},{key:'refining',label:'Refining'},{key:'conching',label:'Conching'},{key:'depositing',label:'Chocolate packout'}]}
 ];
 const SEED=[
   {id:'a1',orderId:'MO-00722',sku:'WIP-5100042-EU · 505.EU (CBE) Liquor EU',cat:'liquor',sub:'liquor',region:'eu',temper:'cbe',machine:'west_mac',qty:4300,batches:1,total:4300,status:'in-progress',priority:'high',due:'2026-03-29',start:'2026-03-23',end:'2026-03-29',notes:'2 of 4 — West Mac (CBE) · Release 03-11'},
@@ -780,7 +1815,7 @@ async function init(){
       orders=raw?JSON.parse(raw):JSON.parse(JSON.stringify(SEED));
     }
     if(!orders.length) {orders=JSON.parse(JSON.stringify(SEED));}
-    await persist();
+    await persist('seed');
   }catch(e){orders=JSON.parse(JSON.stringify(SEED));}
   try{
     let data=await serverGet('vf_collapsed');
@@ -792,17 +1827,20 @@ async function init(){
       if(raw)collapsed=JSON.parse(raw);
     }
   }catch(e){}
-  await loadUsers();
-  if(!tryResumeSession()){
+  if(!(await tryResumeSession())){
     document.getElementById('login-screen').style.display='flex';
   }
+  // Compute which MOs are inventory-derived complete (best-effort, after orders are loaded)
+  await loadInventoryCompletion();
+  // Re-derive completion + auto-promote whenever the Traceability tab uploads a fresh inventory CSV
+  window.addEventListener('vf-inventory-updated', () => { loadInventoryCompletion(); });
 }
 
-async function persist(){
+async function persist(source){
   const ind=document.getElementById('save-ind');
   ind.textContent='Saving…';ind.style.opacity='1';
   try{
-    const ok1=await serverPut('vf_orders',orders);
+    const ok1=await serverPut('vf_orders',orders,source?{source}:null);
     const ok2=await serverPut('vf_collapsed',collapsed);
     if(!ok1||!ok2){
       if(window.storage){
@@ -822,8 +1860,112 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function getMon(d){const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);const m=new Date(d);m.setDate(diff);m.setHours(0,0,0,0);return m;}
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// Cache of MOs that the inventory-movement upload says are complete (≥85% of
+// planned qty produced). Refreshed by loadInventoryCompletion() when the page
+// loads and after a Cin7 sync. Never written to — purely derived from the
+// inventory data the user uploaded on the Traceability tab.
+let inventoryCompletedMOs = new Set();
+
+async function loadInventoryCompletion(){
+  try{
+    const r = await fetch('/api/data/inventory');
+    if(!r.ok) return;
+    const j = await r.json();
+    const moMovements = (j && j.exists && j.value && j.value.moMovements) ? j.value.moMovements : {};
+    _moMovementsCache = moMovements; // make accessible to sync render functions
+
+    // Sum planned qty across ALL scheduled rows that share an MO number,
+    // so a multi-day MO with rows of 1,118 + 559 + 1,397 kg is compared
+    // to its true total (3,074 kg) rather than to any single day's slice.
+    const plannedByMo = {};
+    (orders||[]).forEach(o=>{
+      const moMatch = (o.orderId||'').match(/MO-\d+/);
+      if(!moMatch) return;
+      const moId = moMatch[0];
+      // Use o.total (= qty × batches) when present; fall back to a recomputed
+      // value for legacy rows that may not have it set. Plain o.qty would
+      // miss multi-batch rows (e.g. roaster 6×412 = 2,472 kg total planned).
+      const rowPlanned = (o.total != null && o.total > 0)
+        ? o.total
+        : (o.qty || 0) * (o.batches || 1);
+      plannedByMo[moId] = (plannedByMo[moId] || 0) + rowPlanned;
+    });
+
+    const next = new Set();
+    Object.entries(plannedByMo).forEach(([moId, planned])=>{
+      const inv = moMovements[moId];
+      if(!inv) return;
+      const actual = inv.totalIn || 0;
+      // Treat as complete if planned was 0 but we made some, or pct ≥ 85
+      if((planned === 0 && actual > 0) || (planned > 0 && actual / planned >= 0.85)){
+        next.add(moId);
+      }
+    });
+    inventoryCompletedMOs = next;
+
+    // Auto-promote: when inventory says an MO is done, flip the order's
+    // status to 'complete' so the Work Orders tab badge agrees with the
+    // calendar ✓ and MO Status tab. Skip orders the user has explicitly
+    // put on hold (deliberate state) or already marked complete.
+    let promoted = 0;
+    (orders||[]).forEach(o=>{
+      if(o.status === 'complete' || o.status === 'on-hold') return;
+      const moMatch = (o.orderId||'').match(/MO-\d+/);
+      if(!moMatch) return;
+      if(next.has(moMatch[0])){
+        o.status = 'complete';
+        promoted++;
+      }
+    });
+    if(promoted > 0){
+      await persist('auto-promote');
+      if(typeof render === 'function') render();
+      if(typeof renderCal === 'function') renderCal();
+      console.log(`[auto-promote] ${promoted} order(s) promoted to complete based on uploaded inventory data.`);
+    }
+  }catch(e){/* silent — calendar still works without inventory data */}
+}
+
+// True if this order should be shown as complete on the calendar — either
+// the user manually marked it complete, or the inventory upload's MO-level
+// totals indicate the planned qty was hit.
+function isOrderComplete(o){
+  if(o && o.status === 'complete') return true;
+  const moMatch = (o && o.orderId || '').match(/MO-\d+/);
+  return !!(moMatch && inventoryCompletedMOs.has(moMatch[0]));
+}
+
+// Resolve the "actual produced" qty for an order. Manual override (actualQty)
+// wins; falls back to the inventory upload's per-MO totalIn if available;
+// returns null when neither is set. Used by calendar/work-orders/MO-status
+// displays to show planned vs actual when they diverge.
+//
+// _moMovementsCache is populated by loadInventoryCompletion() (which already
+// fetches /api/data/inventory) so render functions can read it synchronously.
+let _moMovementsCache = {};
+function getEffectiveActual(o, moMovements) {
+  const mm = moMovements || _moMovementsCache;
+  if (o && o.actualQty != null && o.actualQty !== '' && isFinite(o.actualQty)) return Number(o.actualQty);
+  const moMatch = (o && o.orderId || '').match(/MO-\d+/);
+  if (!moMatch) return null;
+  const inv = mm[moMatch[0]];
+  if (inv && inv.totalIn > 0) return inv.totalIn;
+  return null;
+}
+function getPlannedQty(o) {
+  if (o.total != null && o.total > 0) return o.total;
+  return (o.qty || 0) * (o.batches || 1);
+}
+
+// Category color mapping for calendar MO blocks (Voyage design system).
+// Per DESIGN.txt: category colors are for product/operation type only — never status.
+//   blue   = CBE liquor   (505.EU CBE Liquor and related WIP/FG)
+//   green  = CBS liquor   (506.US CBS Liquor and related WIP/FG)
+//   purple = finished chocolate (final blends, bars, pouched product)
+//   orange = roasting / seed prep (roaster + seed cleaning)
+//   teal   = coffee / grinding (everything else WIP)
 function chipClass(o){
-  if(o.machine==='roaster')return 'mo-roast';
+  if(o.machine==='roaster'||o.machine==='seed_clean')return 'mo-roast';
   if(o.cat==='chocolate')return 'mo-choc';
   if(o.cat==='liquor'&&o.temper==='cbe')return 'mo-cbe';
   if(o.cat==='liquor'&&o.temper==='cbs')return 'mo-cbs';
@@ -837,20 +1979,72 @@ function shortSku(s){
 
 function switchTab(t){
   if(t==='admin'&&(!currentUser||currentUser.role!=='admin'))return;
-  ['calendar','orders','capacity','traceability','mo-status','admin'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
+  if(t==='mrp-setup'&&(!currentUser||currentUser.role!=='admin'))return;
+  if(t==='mrp'&&(!currentUser||currentUser.role==='viewer'))return;
+  ['calendar','orders','capacity','traceability','mo-status','live-inv','mrp','mrp-setup','admin'].forEach(k=>{document.getElementById('tab-'+k).style.display=k===t?'':'none';});
   document.querySelectorAll('.tab').forEach(el=>{
     const tabName=el.textContent.trim().toLowerCase();
-    const map={'calendar':'calendar','work orders':'orders','capacity & ops':'capacity','capacity &amp; ops':'capacity','traceability':'traceability','mo status':'mo-status','admin console':'admin'};
+    const map={'calendar':'calendar','work orders':'orders','capacity & ops':'capacity','capacity &amp; ops':'capacity','traceability':'traceability','mo status':'mo-status','live inventory':'live-inv','mrp':'mrp','mrp setup':'mrp-setup','admin console':'admin'};
     el.classList.toggle('active',map[tabName]===t);
   });
   if(t==='calendar')renderCal();
   if(t==='orders')render();
-  if(t==='admin')renderUsers();
+  if(t==='admin'){renderUsers();loadAuditLog();}
   if(t==='traceability'&&!window._traceabilityMounted){window._traceabilityMounted=true;if(window.App){ReactDOM.createRoot(document.getElementById('traceability-root')).render(React.createElement(window.App));}}
   if(t==='mo-status'){populateMOStatusMachineFilter();renderMOStatus();loadSyncStatus();}
+  if(t==='live-inv')loadLiveInventory();
+  if(t==='mrp-setup')loadMrpSetup();
+  if(t==='mrp')loadMrp();
 }
 function shiftCal(d){calOffset+=d*4;renderCal();}
 function resetCal(){calOffset=0;renderCal();}
+
+// Calendar search state — when set, renderCal applies .mo-block--match
+// to matching orders and dims the rest. Pressing Enter (or clicking the
+// "Find" affordance) jumps the calendar window to the first match.
+let calSearchTerm = '';
+
+function onCalSearchInput(){
+  calSearchTerm = (document.getElementById('cal-search').value || '').trim().toLowerCase();
+  document.getElementById('cal-search-clear').style.display = calSearchTerm ? '' : 'none';
+  updateCalSearchCount();
+  renderCal();
+}
+function updateCalSearchCount(){
+  const el = document.getElementById('cal-search-count');
+  if (!calSearchTerm) { el.textContent = ''; return; }
+  const matches = orders.filter(orderMatchesCalSearch);
+  el.textContent = matches.length + (matches.length === 1 ? ' match' : ' matches');
+  el.style.color = matches.length === 0 ? 'var(--vf-danger-text)' : 'var(--vf-text-tertiary)';
+}
+function orderMatchesCalSearch(o){
+  if (!calSearchTerm) return false;
+  const hay = ((o.orderId||'') + ' ' + (o.sku||'') + ' ' + (o.notes||'')).toLowerCase();
+  return hay.includes(calSearchTerm);
+}
+function clearCalSearch(){
+  calSearchTerm = '';
+  const inp = document.getElementById('cal-search');
+  if (inp) inp.value = '';
+  document.getElementById('cal-search-clear').style.display = 'none';
+  document.getElementById('cal-search-count').textContent = '';
+  renderCal();
+}
+function calSearchJump(){
+  if (!calSearchTerm) return;
+  const matches = orders.filter(orderMatchesCalSearch);
+  if (matches.length === 0) return;
+  // Pick earliest start date among matches; fall back to due date
+  const dates = matches.map(o => o.start || o.due).filter(Boolean).sort();
+  if (!dates.length) return;
+  const target = new Date(dates[0] + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const monToday = getMon(today);
+  const diffDays = Math.round((target - monToday) / 86400000);
+  // calOffset is in weeks; place target in the first week of the visible window
+  calOffset = Math.floor(diffDays / 7);
+  renderCal();
+}
 
 function renderCal(){
   const today=new Date();today.setHours(0,0,0,0);
@@ -882,10 +2076,35 @@ function renderCal(){
         html+=`<td class="cal-cell${isToday?' today-col':''}${isMon?' week-sep':''}" onclick="calClick('${m.key}','${ds}')">`;
         if(active.length){
           active.forEach(o=>{
-            html+=`<div class="mo-block ${chipClass(o)}" title="${esc((o.sku||'')+'\n'+(o.notes||''))}" onclick="event.stopPropagation();editById('${esc(o.id)}')">
-              <div class="mo-id">${esc(o.orderId)||'—'}</div>
+            const done=isOrderComplete(o);
+            const doneAttr=done?' data-complete="1"':'';
+            const doneMark=done?'<span class="mo-done-mark" aria-label="Completed">✓</span> ':'';
+            const isMatch=calSearchTerm && orderMatchesCalSearch(o);
+            const matchCls=isMatch?' mo-block--match':'';
+            const isTentative = o.confirmed === false;
+            const tentativeCls = isTentative ? ' mo-block--tentative' : '';
+            // Show actual qty (manual override or inventory-derived) when it
+            // differs meaningfully from planned. Tooltip gets the breakdown.
+            const planned = getPlannedQty(o);
+            const actual = getEffectiveActual(o);
+            const actualSource = (o.actualQty != null && o.actualQty !== '' && isFinite(o.actualQty)) ? 'manual' : 'inventory';
+            const showActual = actual != null && planned > 0 && Math.abs(actual - planned) / planned >= 0.05;
+            let qtyBlock = '';
+            if (planned) {
+              if (showActual) {
+                qtyBlock = `<div class="mo-qty">${planned.toLocaleString()} kg planned</div>
+                            <div class="mo-qty-actual">${actual.toLocaleString()} kg actual</div>`;
+              } else {
+                qtyBlock = `<div class="mo-qty">${planned.toLocaleString()} kg</div>`;
+              }
+            }
+            const titleSuffix = (done ? '\nCompleted' : '') +
+              (isTentative ? '\nTentative — not confirmed for production' : '') +
+              (showActual ? `\nActual: ${actual.toLocaleString()} kg (${actualSource}) vs planned ${planned.toLocaleString()} kg` : '');
+            html+=`<div class="mo-block ${chipClass(o)}${done?' mo-block--complete':''}${matchCls}${tentativeCls}"${doneAttr} title="${esc((o.sku||'')+'\n'+(o.notes||''))+titleSuffix}" onclick="event.stopPropagation();editById('${esc(o.id)}')">
+              <div class="mo-id">${doneMark}${esc(o.orderId)||'—'}</div>
               ${o.sku?`<div class="mo-sku">${esc(shortSku(o.sku))}</div>`:''}
-              ${o.total?`<div class="mo-qty">${o.total.toLocaleString()} kg</div>`:''}
+              ${qtyBlock}
             </div>`;
           });
         }else html+=`<span class="mo-empty">·</span>`;
@@ -895,6 +2114,7 @@ function renderCal(){
     });
   });
   document.getElementById('cal-table').innerHTML=html+'</tbody>';
+  document.getElementById('cal-table').classList.toggle('cal-searching', !!calSearchTerm);
 }
 
 function editById(id){const o=orders.find(x=>x.id===id);if(!o)return;openModal(o);}
@@ -941,13 +2161,15 @@ function openModal(prefill,mk,ds){
   if(!canEditOrders()){alert('You do not have permission to create or edit orders.');return;}
   editingId=null;
   document.getElementById('mtitle').textContent='New work order';
-  ['f-oid','f-due','f-start','f-end','f-qty','f-notes','f-sku','f-shiaocatjam'].forEach(id=>{document.getElementById(id).value='';});
+  ['f-oid','f-due','f-start','f-end','f-qty','f-notes','f-sku'].forEach(id=>{document.getElementById(id).value='';});
   document.getElementById('f-cat').value='';
   document.getElementById('f-sub').innerHTML='<option value="">— select category first —</option>';
   document.getElementById('f-region').value='';document.getElementById('f-temper').value='';
   document.getElementById('f-machine').value=mk||'';
   document.getElementById('f-batches').value='1';document.getElementById('f-total').value='';
   document.getElementById('f-status').value='queued';document.getElementById('f-priority').value='low';
+  document.getElementById('f-confirmed').checked=false; // default new orders to unconfirmed
+  document.getElementById('f-actual-qty').value='';
   document.getElementById('wrap-variants').style.display='none';
   document.getElementById('batch-info').style.display='none';
   document.getElementById('bom-box').style.display='none';
@@ -969,11 +2191,38 @@ function openModal(prefill,mk,ds){
     document.getElementById('f-batches').value=prefill.batches||'1';
     document.getElementById('f-status').value=prefill.status||'queued';
     document.getElementById('f-priority').value=prefill.priority||'low';
+    document.getElementById('f-confirmed').checked=!!prefill.confirmed;
+    document.getElementById('f-actual-qty').value=(prefill.actualQty != null && prefill.actualQty !== '') ? prefill.actualQty : '';
     document.getElementById('f-notes').value=prefill.notes||'';
-    document.getElementById('f-shiaocatjam').value=prefill.shiaocatjam||'';
     calcBOM();
   }
+  // Show/hide the complete + delete actions depending on whether we're editing an existing order
+  const completeBtn=document.getElementById('f-toggle-complete-btn');
+  const deleteBtn=document.getElementById('f-delete-btn');
+  if(prefill&&prefill.id){
+    const isComplete=(prefill.status==='complete');
+    completeBtn.style.display='inline-flex';
+    completeBtn.textContent=isComplete?'↺ Reopen':'✓ Mark complete';
+    completeBtn.classList.toggle('btn-primary',!isComplete);
+    deleteBtn.style.display='inline-flex';
+  }else{
+    completeBtn.style.display='none';
+    deleteBtn.style.display='none';
+  }
   document.getElementById('modal').style.display='flex';
+}
+function toggleComplete(){
+  if(!editingId)return;
+  if(!canEditOrders()){alert('You do not have permission to edit orders.');return;}
+  const cur=document.getElementById('f-status').value;
+  document.getElementById('f-status').value=(cur==='complete')?'in-progress':'complete';
+  // Save immediately so the change persists without requiring "Save order"
+  saveOrder();
+}
+function deleteCurrent(){
+  if(!editingId)return;
+  deleteOrder(editingId);
+  closeModal();
 }
 function closeModal(){document.getElementById('modal').style.display='none';}
 function closeOut(e){if(e.target===e.currentTarget)closeModal();}
@@ -1003,7 +2252,8 @@ function saveOrder(){
     status:document.getElementById('f-status').value,
     priority:document.getElementById('f-priority').value,
     notes:document.getElementById('f-notes').value.trim(),
-    shiaocatjam:document.getElementById('f-shiaocatjam').value.trim()
+    confirmed:document.getElementById('f-confirmed').checked,
+    actualQty: (function(){ const v=document.getElementById('f-actual-qty').value; return v===''?null:parseFloat(v); })()
   };
   if(editingId){const i=orders.findIndex(x=>x.id===editingId);if(i!==-1)orders[i]=o;}
   else orders.push(o);
@@ -1033,18 +2283,32 @@ function render(){
         <span class="card-meta">${items.length} order${items.length!==1?'s':''}</span>
       </div>
       ${isOpen?`<table class="orders">
-        <thead><tr><th>ID</th><th>SKU</th><th>Machine</th><th>Start</th><th>End</th><th>Total</th><th>Priority</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>ID</th><th>SKU</th><th>Machine</th><th>Start</th><th>End</th><th>Total</th><th>Priority</th><th>Status</th><th>Confirm</th><th></th></tr></thead>
         <tbody>${items.map(o=>{
           const od=o.due&&o.status!=='complete'&&o.due<todayStr;
+          // Treat undefined (legacy data) as confirmed; only explicit false → Tentative
+          const isTentative = o.confirmed === false;
+          const confirmedBadge = isTentative
+            ? '<span class="badge badge-on-hold">◌ Tentative</span>'
+            : '<span class="badge badge-complete">✓ Confirmed</span>';
           return`<tr>
             <td style="font-size:12px;white-space:nowrap;">${esc(o.orderId)||'—'}</td>
             <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(o.sku||'')}">${esc(shortSku(o.sku))||'—'}</td>
             <td style="font-size:12px;">${esc(o.machine)||'—'}</td>
             <td style="font-size:12px;">${esc(o.start)||'—'}</td>
-            <td style="font-size:12px;${od?'color:#e04040;font-weight:500;':''}">${esc(o.end||o.due)||'—'}</td>
-            <td style="white-space:nowrap;">${o.total?o.total.toLocaleString()+' kg':'—'}</td>
+            <td style="font-size:12px;${od?'color:var(--vf-danger-text);font-weight:500;':''}">${esc(o.end||o.due)||'—'}</td>
+            <td style="white-space:nowrap;">${(function(){
+              const planned = getPlannedQty(o);
+              const actual = getEffectiveActual(o);
+              const showActual = actual != null && planned > 0 && Math.abs(actual - planned) / planned >= 0.05;
+              if (!planned) return '—';
+              if (!showActual) return planned.toLocaleString() + ' kg';
+              const sourceTag = (o.actualQty != null && o.actualQty !== '' && isFinite(o.actualQty)) ? 'manual' : 'inventory';
+              return planned.toLocaleString() + ' kg<div style="font-size:10px;color:var(--vf-success-text);font-weight:500;margin-top:2px;" title="Actual produced — ' + sourceTag + '">actual: ' + actual.toLocaleString() + ' kg</div>';
+            })()}</td>
             <td><span class="badge badge-${o.priority||'low'}">${{high:'High',med:'Med',low:'Low'}[o.priority]||'—'}</span></td>
             <td><span class="badge badge-${o.status}">${{queued:'Queued','in-progress':'In progress','on-hold':'On hold',complete:'Complete'}[o.status]||o.status}</span></td>
+            <td>${confirmedBadge}</td>
             <td style="white-space:nowrap;">
               ${canEditOrders()?`<button class="btn btn-sm" onclick="editById('${o.id}')">Edit</button>
               <button class="btn btn-sm btn-danger" style="margin-left:4px;" onclick="deleteOrder('${o.id}')">Del</button>`:''}
@@ -1063,7 +2327,7 @@ function renderMetrics(){
     <div class="metric"><div class="metric-label">Total orders</div><div class="metric-value">${total}</div></div>
     <div class="metric"><div class="metric-label">In progress</div><div class="metric-value">${inprog}</div></div>
     <div class="metric"><div class="metric-label">Complete</div><div class="metric-value">${complete}</div></div>
-    <div class="metric"><div class="metric-label">Overdue</div><div class="metric-value" style="${overdue?'color:#e04040':''}">${overdue}</div></div>`;
+    <div class="metric"><div class="metric-label">Overdue</div><div class="metric-value" style="${overdue?'color:var(--vf-danger-text)':''}">${overdue}</div></div>`;
 }
 function toggleGroup(grp){collapsed[grp]=!collapsed[grp];persist();render();}
 init();
@@ -1073,7 +2337,7 @@ init();
 const IMPORT_MACHINE_LABELS={
   seed_clean:'Seed cleaning',roaster:'Roaster',east_mac:'East Mac (CBS)',west_mac:'West Mac (CBE)',
   mac_1250:'1250 Mac',mac_packout:'Mac Packout',fat_melter:'Fat melter',
-  refining:'Refining',conching:'Conching',depositing:'Pack out'
+  refining:'Refining',conching:'Conching',depositing:'Chocolate packout'
 };
 
 let importParsed=[];
@@ -1218,6 +2482,635 @@ async function triggerCin7Sync() {
   btn.textContent = '⟳ Sync from Cin7';
 }
 
+// ── MRP Tab (operator+) ──────────────────────────────────────────────────────
+//
+// Hits GET /api/mrp/run with the user's chosen toggles, renders three views
+// over the result: suggested POs, at-risk MOs, and a per-SKU drill-down.
+
+let mrpData = null;
+let mrpSection = 'pos';
+
+async function loadMrp() {
+  // Show empty state until the user clicks Run (so we don't spam the API on every tab switch)
+  if (!mrpData) {
+    document.getElementById('mrp-empty').style.display = 'block';
+    document.getElementById('mrp-results').style.display = 'none';
+    document.getElementById('mrp-kpis').innerHTML = '';
+    document.getElementById('mrp-run-ts').textContent = '';
+  } else {
+    renderMrp();
+  }
+}
+
+async function runMrp() {
+  const params = new URLSearchParams({
+    includeUnconfirmed: document.getElementById('mrp-include-unconfirmed').checked ? '1' : '0',
+    applyWastage: document.getElementById('mrp-apply-wastage').checked ? '1' : '0',
+    horizonDays: String(parseInt(document.getElementById('mrp-horizon-days').value, 10) || 120),
+  });
+  const tsEl = document.getElementById('mrp-run-ts');
+  tsEl.textContent = 'Running…';
+  try {
+    const r = await fetch('/api/mrp/run?' + params.toString());
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    mrpData = j;
+    document.getElementById('mrp-empty').style.display = 'none';
+    document.getElementById('mrp-results').style.display = '';
+    const d = new Date(j.runAt);
+    tsEl.textContent = `Last run ${d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · today=${j.today}`;
+    renderMrp();
+  } catch (e) {
+    tsEl.textContent = 'Failed: ' + e.message;
+    tsEl.style.color = 'var(--vf-danger-text)';
+  }
+}
+
+function switchMrpSection(name) {
+  mrpSection = name;
+  ['pos','risk','skus'].forEach(k => {
+    document.getElementById('mrp-section-' + k).style.display = (k === name) ? '' : 'none';
+    const btn = document.getElementById('mrp-tab-' + k);
+    if (btn) {
+      btn.style.borderBottom = (k === name) ? '2px solid var(--vf-brand-orange)' : '2px solid transparent';
+      btn.style.background = (k === name) ? '' : 'transparent';
+    }
+  });
+}
+
+function renderMrp() {
+  if (!mrpData) return;
+  const s = mrpData.summary || {};
+
+  // KPI strip
+  document.getElementById('mrp-kpis').innerHTML = [
+    { label:'Orders considered', val: (s.ordersConsidered||0).toLocaleString(),    accent:'' },
+    { label:'Suggested POs',     val: (s.suggestedPoCount||0).toLocaleString(),    accent:'var(--vf-info-base)' },
+    { label:'Overdue POs',       val: (s.overduePoCount||0).toLocaleString(),      accent: s.overduePoCount > 0 ? 'var(--vf-danger-base)' : 'var(--vf-success-base)' },
+    { label:'At-risk MOs',       val: (s.atRiskOrderCount||0).toLocaleString(),    accent: s.atRiskOrderCount > 0 ? 'var(--vf-warning-base)' : 'var(--vf-success-base)' },
+  ].map(x => `<div class="metric" style="${x.accent?'border-left:3px solid '+x.accent+';':''}"><div class="metric-label">${x.label}</div><div class="metric-value">${x.val}</div></div>`).join('');
+
+  renderMrpPos();
+  renderMrpRisk();
+  renderMrpSkus();
+}
+
+function renderMrpPos() {
+  const tbody = document.getElementById('mrp-po-tbody');
+  if (!tbody) return;
+  const search = (document.getElementById('mrp-po-search').value || '').toLowerCase();
+  const overdueOnly = document.getElementById('mrp-po-overdue-only').checked;
+  const filtered = (mrpData.suggestedPOs || []).filter(p => {
+    if (overdueOnly && !p.isOverdue) return false;
+    if (search && !p.sku.toLowerCase().includes(search) && !(p.name || '').toLowerCase().includes(search)) return false;
+    return true;
+  });
+  tbody.innerHTML = filtered.length === 0 ? `<tr><td colspan="7" class="empty">No POs match.</td></tr>` :
+    filtered.map(p => `<tr>
+      <td><span class="mo-id">${escapeHtml(p.sku)}</span></td>
+      <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--vf-text-secondary);" title="${escapeHtml(p.name||'')}">${escapeHtml(p.name||'—')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;">${(p.qtyToOrder||0).toLocaleString()}</td>
+      <td>${p.leadTimeDays != null ? p.leadTimeDays + 'd' : '—'}<div style="font-size:10px;color:var(--vf-text-tertiary);">${escapeHtml(p.leadTimeSource||'')}</div></td>
+      <td style="white-space:nowrap;font-size:12px;${p.isOverdue?'color:var(--vf-danger-text);font-weight:600;':''}">${p.mustOrderByDate || '—'}${p.isOverdue ? ' 🚨' : ''}</td>
+      <td style="white-space:nowrap;font-size:12px;color:var(--vf-text-tertiary);">${p.earliestNeedDate || '—'}</td>
+      <td style="font-size:11px;color:var(--vf-text-secondary);">first triggered by upcoming demand</td>
+    </tr>`).join('');
+}
+
+function renderMrpRisk() {
+  const tbody = document.getElementById('mrp-risk-tbody');
+  if (!tbody) return;
+  const orders = mrpData.atRiskOrders || [];
+  tbody.innerHTML = orders.length === 0 ? `<tr><td colspan="6" class="empty">No at-risk MOs. 🎉</td></tr>` :
+    orders.map(o => {
+      const totalShort = o.shortages.reduce((s, x) => s + x.qtyShort, 0);
+      const earliestShortage = o.shortages.reduce((m, s) => (m && m < s.neededByDate) ? m : s.neededByDate, null);
+      const rmsShort = o.shortages.slice(0, 4).map(s => `${escapeHtml(s.sku)} (${Math.round(s.qtyShort).toLocaleString()})`).join(', ');
+      const moreCount = o.shortages.length - 4;
+      return `<tr>
+        <td><span class="mo-id">${escapeHtml(o.orderId)}</span></td>
+        <td style="font-size:12px;">${escapeHtml(o.sourceFgSku || '—')}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;">${(o.sourceFgQty || 0).toLocaleString()}</td>
+        <td style="white-space:nowrap;font-size:12px;color:var(--vf-warning-text);">${earliestShortage || '—'}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--vf-danger-text);font-weight:500;">${Math.round(totalShort).toLocaleString()}</td>
+        <td style="font-size:11px;color:var(--vf-text-secondary);">${rmsShort}${moreCount > 0 ? ` <span style="color:var(--vf-text-tertiary);">+${moreCount} more</span>` : ''}</td>
+      </tr>`;
+    }).join('');
+}
+
+function renderMrpSkus() {
+  const tbody = document.getElementById('mrp-sku-tbody');
+  if (!tbody) return;
+  const search = (document.getElementById('mrp-sku-search').value || '').toLowerCase();
+  const shortOnly = document.getElementById('mrp-sku-short-only').checked;
+  const rows = (mrpData.skuResults || []).filter(r => {
+    if (shortOnly && r.totalShort <= 0) return false;
+    if (search && !r.sku.toLowerCase().includes(search) && !(r.name||'').toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a, b) => (b.totalShort || 0) - (a.totalShort || 0));
+  tbody.innerHTML = rows.length === 0 ? `<tr><td colspan="7" class="empty">No SKUs match.</td></tr>` :
+    rows.map(r => `<tr>
+      <td><span class="mo-id">${escapeHtml(r.sku)}</span><div style="font-size:10px;color:var(--vf-text-tertiary);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.name||'')}</div></td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;">${Math.round(r.onHand||0).toLocaleString()}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:${r.onOrder>0?'var(--vf-info-text)':'var(--vf-text-tertiary)'};">${Math.round(r.onOrder||0).toLocaleString()}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:${r.inTransit>0?'var(--vf-info-text)':'var(--vf-text-tertiary)'};">${Math.round(r.inTransit||0).toLocaleString()}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;">${Math.round(r.totalDemand||0).toLocaleString()}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:${r.totalShort>0?'var(--vf-danger-text)':'var(--vf-success-text)'};font-weight:500;">${r.totalShort > 0 ? Math.round(r.totalShort).toLocaleString() : '—'}</td>
+      <td style="font-size:11px;">${r.isContract ? '<span class="badge badge-on-hold">contract</span>' : (r.leadTimeDays + 'd')}</td>
+    </tr>`).join('');
+}
+
+function exportMrpCsv() {
+  if (!mrpData || !mrpData.suggestedPOs || !mrpData.suggestedPOs.length) {
+    alert('No POs to export. Run MRP first.');
+    return;
+  }
+  const headers = ['SKU','Name','QtyToOrder','LeadTimeDays','LeadTimeSource','MustOrderBy','EarliestNeed','ProjectedReceipt','Overdue'];
+  const rows = mrpData.suggestedPOs.map(p => [
+    p.sku, p.name || '', p.qtyToOrder, p.leadTimeDays != null ? p.leadTimeDays : '',
+    p.leadTimeSource, p.mustOrderByDate || '', p.earliestNeedDate || '',
+    p.projectedReceiptDate || '', p.isOverdue ? 'YES' : 'no',
+  ].map(v => {
+    const s = String(v);
+    return /[,"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(','));
+  const csv = headers.join(',') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mrp-suggested-pos-' + mrpData.today + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── MRP Setup Tab (admin-only) ───────────────────────────────────────────────
+//
+// Read-only viewers for the BOM and supply-settings data the server has
+// ingested. Phase 3 will layer the MRP calc on top of these.
+
+let mrpBomsData = null;
+let mrpSupplyData = null;
+let mrpSetupSection = 'boms';
+
+async function loadMrpSetup() {
+  try {
+    const [b, s] = await Promise.all([
+      fetch('/api/boms').then(r => r.json()),
+      fetch('/api/supply-settings').then(r => r.json()),
+    ]);
+    mrpBomsData = b;
+    mrpSupplyData = s;
+  } catch (e) {
+    mrpBomsData = { ok:false, parents:{}, parentCount:0 };
+    mrpSupplyData = { ok:false, perSku:{}, defaults:{} };
+  }
+  renderMrpSetupKpis();
+  populateMrpMachineFilter();
+  renderMrpBoms();
+  renderMrpSupply();
+}
+
+function renderMrpSetupKpis() {
+  const el = document.getElementById('mrp-setup-kpis');
+  if (!el) return;
+  const boms = mrpBomsData || {};
+  const supply = mrpSupplyData || {};
+  const parents = boms.parents || {};
+  const totalVersions = Object.values(parents).reduce((s, vs) => s + vs.length, 0);
+  // Count default versions where machine is null (need mapping)
+  const unmapped = Object.values(parents).reduce((s, vs) => {
+    const def = vs[0];
+    return s + (def && !def.machine ? 1 : 0);
+  }, 0);
+  const lastBom = boms.lastImport ? new Date(boms.lastImport).toLocaleDateString() : 'never';
+  const lastSupply = supply.lastImport ? new Date(supply.lastImport).toLocaleDateString() : 'never';
+  el.innerHTML = [
+    { label:'BOM parents',       val: (boms.parentCount||0).toLocaleString(), accent:'' },
+    { label:'BOM versions',      val: totalVersions.toLocaleString(),         accent:'var(--vf-info-base)' },
+    { label:'Unmapped machines', val: unmapped.toLocaleString(),              accent: unmapped > 0 ? 'var(--vf-warning-base)' : 'var(--vf-success-base)' },
+    { label:'Supply SKUs',       val: Object.keys(supply.perSku||{}).length.toLocaleString(), accent:'var(--vf-cat-purple-base)' },
+  ].map(s => `<div class="metric" style="${s.accent?'border-left:3px solid '+s.accent+';':''}"><div class="metric-label">${s.label}</div><div class="metric-value">${s.val}</div></div>`).join('') +
+  `<div style="grid-column:1/-1;font-size:11px;color:var(--vf-text-tertiary);margin-top:4px;">Last BOM import: ${lastBom} · Last supply-settings import: ${lastSupply}</div>`;
+}
+
+function switchMrpSetupSection(name) {
+  mrpSetupSection = name;
+  ['boms','supply','expand'].forEach(k => {
+    document.getElementById('mrp-section-' + k).style.display = (k === name) ? '' : 'none';
+    const btn = document.getElementById('mrp-tab-' + k);
+    if (btn) btn.style.borderBottom = (k === name) ? '2px solid var(--vf-brand-orange)' : '2px solid transparent';
+    if (btn) btn.style.background = (k === name) ? '' : 'transparent';
+  });
+}
+
+function populateMrpMachineFilter() {
+  const sel = document.getElementById('mrp-bom-machine-filter');
+  if (!sel || sel.options.length > 1) return;
+  const machines = new Set();
+  Object.values((mrpBomsData||{}).parents || {}).forEach(vs => {
+    if (vs[0] && vs[0].machine) machines.add(vs[0].machine);
+  });
+  [...machines].sort().forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = MO_STATUS_MACHINE_LABELS[m] || m;
+    sel.appendChild(opt);
+  });
+  // Add explicit "(unmapped)" option
+  const opt = document.createElement('option');
+  opt.value = '__unmapped__';
+  opt.textContent = '(unmapped)';
+  sel.appendChild(opt);
+}
+
+function renderMrpBoms() {
+  const tbody = document.getElementById('mrp-bom-tbody');
+  if (!tbody || !mrpBomsData) return;
+  const search = (document.getElementById('mrp-bom-search').value || '').toLowerCase();
+  const machineFilter = document.getElementById('mrp-bom-machine-filter').value;
+  const unmappedOnly = document.getElementById('mrp-bom-unmapped-only').checked;
+  const parents = mrpBomsData.parents || {};
+  const rows = Object.entries(parents).map(([sku, versions]) => ({ sku, versions, def: versions[0] }));
+  const filtered = rows.filter(r => {
+    if (unmappedOnly && r.def.machine) return false;
+    if (machineFilter === '__unmapped__' && r.def.machine) return false;
+    if (machineFilter && machineFilter !== '__unmapped__' && r.def.machine !== machineFilter) return false;
+    if (search) {
+      const hay = (r.sku + ' ' + (r.def.parentName||'')).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  }).sort((a, b) => a.sku.localeCompare(b.sku));
+  tbody.innerHTML = filtered.length === 0 ? `<tr><td colspan="7" class="empty">No BOMs match.</td></tr>` :
+    filtered.map(r => {
+      const versions = r.versions.length > 1 ? `${r.versions.length} (${r.versions.map(v=>v.version).join(',')})` : r.def.version;
+      const machineCell = r.def.machine
+        ? `<span class="badge badge-in-progress">${MO_STATUS_MACHINE_LABELS[r.def.machine]||r.def.machine}</span>`
+        : `<span class="badge badge-on-hold">unmapped</span>`;
+      const lead = r.def.productionLeadTime != null ? r.def.productionLeadTime + 'd' : '—';
+      return `<tr style="cursor:pointer;" onclick="toggleMrpBomDetail('${escapeHtml(r.sku)}')">
+        <td><span class="mo-id">${escapeHtml(r.sku)}</span></td>
+        <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r.def.parentName||'')}">${escapeHtml(r.def.parentName||'—')}</td>
+        <td style="text-align:center;">${versions}</td>
+        <td>${machineCell}</td>
+        <td style="text-align:right;">${lead}</td>
+        <td style="text-align:right;">${r.def.components.length}</td>
+        <td style="text-align:right;">${r.def.qtyToProduce}</td>
+      </tr>
+      <tr id="mrp-bom-detail-${escapeHtml(r.sku)}" style="display:none;background:var(--vf-surface-sunken);">
+        <td colspan="7" style="padding:var(--vf-space-3);">
+          ${r.def.components.map(c => `
+            <div style="display:flex;gap:var(--vf-space-3);align-items:center;font-size:11px;padding:2px 0;">
+              <span style="color:var(--vf-text-tertiary);min-width:60px;">op${c.op}</span>
+              <span class="mo-id" style="min-width:180px;">${escapeHtml(c.sku)}</span>
+              <span style="flex:1;color:var(--vf-text-secondary);">${escapeHtml(c.name||'')}</span>
+              <span style="font-variant-numeric:tabular-nums;color:var(--vf-text-primary);">qty=${c.qty}</span>
+              <span style="color:${c.wastagePct>0?'var(--vf-warning-text)':'var(--vf-text-tertiary)'};">+${c.wastagePct}% waste</span>
+            </div>
+          `).join('')}
+        </td>
+      </tr>`;
+    }).join('');
+}
+
+function toggleMrpBomDetail(sku) {
+  const el = document.getElementById('mrp-bom-detail-' + sku);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+function renderMrpSupply() {
+  const tbody = document.getElementById('mrp-supply-tbody');
+  if (!tbody || !mrpSupplyData) return;
+  // Populate defaults editor (only first time / when data reloads)
+  const defaults = mrpSupplyData.defaults || {};
+  const dl = document.getElementById('mrp-default-lead');
+  const ds = document.getElementById('mrp-default-safety');
+  const dp = document.getElementById('mrp-default-pack');
+  if (dl && document.activeElement !== dl) dl.value = defaults.leadTimeDays ?? 30;
+  if (ds && document.activeElement !== ds) ds.value = defaults.safetyStockDays ?? 14;
+  if (dp && document.activeElement !== dp) dp.value = defaults.packagingDefaultDays ?? 14;
+
+  const search = (document.getElementById('mrp-supply-search').value || '').toLowerCase();
+  const sourceFilter = document.getElementById('mrp-supply-source-filter').value;
+  const perSku = mrpSupplyData.perSku || {};
+  const rows = Object.entries(perSku).map(([sku, v]) => ({
+    sku, ...v,
+    source: v.isContract ? 'contract' : v.isAlias ? 'alias' : v.leadTimeDays != null ? 'explicit' : 'default',
+  }));
+  const filtered = rows.filter(r => {
+    if (sourceFilter && r.source !== sourceFilter) return false;
+    if (search && !r.sku.toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a,b) => a.sku.localeCompare(b.sku));
+  tbody.innerHTML = filtered.length === 0 ? `<tr><td colspan="5" class="empty">No SKUs match.</td></tr>` :
+    filtered.map(r => {
+      const sku = escapeHtml(r.sku);
+      const leadDisabled = r.isContract || r.isAlias;
+      const leadValue = r.leadTimeDays != null ? r.leadTimeDays : '';
+      const sources = ['explicit','contract','alias'];
+      const sourceSelect = `<select onchange="onMrpSourceChange('${sku}', this.value)" style="padding:3px 6px;font-size:11px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">
+        ${sources.map(s => `<option value="${s}"${s===r.source?' selected':''}>${s}</option>`).join('')}
+      </select>`;
+      let notesCell = '';
+      if (r.isAlias) {
+        notesCell = `<span style="font-size:11px;color:var(--vf-text-tertiary);">aliased to </span>
+          <input type="text" value="${escapeHtml(r.aliasOf||'')}" onblur="onMrpAliasChange('${sku}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" style="width:140px;padding:2px 6px;font-size:11px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:var(--vf-surface-raised);color:var(--vf-text-primary);font-family:inherit;">`;
+      } else if (r.isContract) {
+        notesCell = `<span style="font-size:11px;color:var(--vf-warning-text);">contract — excluded from PO suggestions</span>`;
+      } else if (r.raw) {
+        notesCell = `<span style="font-size:11px;color:var(--vf-text-tertiary);">imported as "${escapeHtml(r.raw)}"</span>`;
+      } else {
+        notesCell = `<span style="font-size:11px;color:var(--vf-text-tertiary);">—</span>`;
+      }
+      return `<tr>
+        <td><span class="mo-id">${sku}</span></td>
+        <td style="text-align:right;">
+          <input type="number" min="0" value="${leadValue}" ${leadDisabled?'disabled':''} onblur="onMrpLeadChange('${sku}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" style="width:70px;padding:3px 6px;font-size:12px;border:1px solid var(--vf-border-default);border-radius:var(--vf-radius-sm);background:${leadDisabled?'var(--vf-surface-sunken)':'var(--vf-surface-raised)'};color:var(--vf-text-primary);font-family:inherit;text-align:right;font-variant-numeric:tabular-nums;">
+        </td>
+        <td>${sourceSelect}</td>
+        <td>${notesCell}</td>
+        <td style="text-align:right;">
+          <button class="btn btn-sm btn-danger" onclick="deleteMrpSku('${sku}')" title="Remove this SKU (falls back to default)" style="padding:2px 8px;font-size:11px;">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+}
+
+// ── Edit handlers — each mutates mrpSupplyData and triggers a save ──────────
+
+function onMrpLeadChange(sku, value) {
+  const v = parseInt(value, 10);
+  const entry = mrpSupplyData.perSku[sku];
+  if (!entry) return;
+  entry.leadTimeDays = isFinite(v) && v >= 0 ? v : null;
+  entry.raw = ''; // clear imported raw text since user has overridden
+  saveMrpSupply();
+}
+function onMrpSourceChange(sku, source) {
+  const entry = mrpSupplyData.perSku[sku];
+  if (!entry) return;
+  entry.isContract = (source === 'contract');
+  entry.isAlias = (source === 'alias');
+  if (source !== 'alias') delete entry.aliasOf;
+  if (source === 'contract' || source === 'alias') entry.leadTimeDays = null;
+  saveMrpSupply();
+  renderMrpSupply();
+}
+function onMrpAliasChange(sku, aliasOf) {
+  const entry = mrpSupplyData.perSku[sku];
+  if (!entry) return;
+  entry.aliasOf = aliasOf.trim() || null;
+  saveMrpSupply();
+}
+function deleteMrpSku(sku) {
+  if (!confirm('Remove ' + sku + ' from the per-SKU overrides? It will fall back to the global default lead time.')) return;
+  delete mrpSupplyData.perSku[sku];
+  saveMrpSupply();
+  renderMrpSupply();
+}
+
+function openAddSkuRow() {
+  const row = document.getElementById('mrp-add-sku-row');
+  document.getElementById('mrp-new-sku').value = '';
+  document.getElementById('mrp-new-lead').value = '';
+  document.getElementById('mrp-new-source').value = 'explicit';
+  document.getElementById('mrp-new-alias').value = '';
+  document.getElementById('mrp-new-alias-wrap').style.display = 'none';
+  row.style.display = '';
+  document.getElementById('mrp-new-sku').focus();
+  // Wire the source dropdown's change handler each time (replace handler in case it was cached)
+  document.getElementById('mrp-new-source').onchange = function() {
+    document.getElementById('mrp-new-alias-wrap').style.display = (this.value === 'alias') ? '' : 'none';
+  };
+}
+function confirmAddSku() {
+  const sku = document.getElementById('mrp-new-sku').value.trim();
+  if (!sku) { alert('SKU is required.'); return; }
+  if (mrpSupplyData.perSku[sku]) { alert(sku + ' already has a setting. Edit the existing row.'); return; }
+  const source = document.getElementById('mrp-new-source').value;
+  const lead = parseInt(document.getElementById('mrp-new-lead').value, 10);
+  const aliasOf = document.getElementById('mrp-new-alias').value.trim();
+  const entry = { isContract: source === 'contract', isAlias: source === 'alias' };
+  if (source === 'explicit') entry.leadTimeDays = isFinite(lead) ? lead : null;
+  else entry.leadTimeDays = null;
+  if (source === 'alias') {
+    if (!aliasOf) { alert('Alias target SKU is required.'); return; }
+    entry.aliasOf = aliasOf;
+  }
+  mrpSupplyData.perSku[sku] = entry;
+  saveMrpSupply();
+  document.getElementById('mrp-add-sku-row').style.display = 'none';
+  renderMrpSupply();
+}
+
+let mrpSupplySaveTimer = null;
+async function saveMrpSupply() {
+  // Collect current defaults from inputs
+  const defaults = {
+    leadTimeDays: parseInt(document.getElementById('mrp-default-lead').value, 10) || 30,
+    safetyStockDays: parseInt(document.getElementById('mrp-default-safety').value, 10) || 14,
+    packagingDefaultDays: parseInt(document.getElementById('mrp-default-pack').value, 10) || 14,
+  };
+  mrpSupplyData.defaults = defaults;
+  const ind = document.getElementById('mrp-supply-save-ind');
+  if (ind) { ind.textContent = 'Saving…'; ind.style.color = 'var(--vf-text-tertiary)'; }
+  // Debounce so rapid edits coalesce
+  clearTimeout(mrpSupplySaveTimer);
+  mrpSupplySaveTimer = setTimeout(async () => {
+    try {
+      const r = await fetch('/api/supply-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ defaults, perSku: mrpSupplyData.perSku }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+      mrpSupplyData.lastImport = j.lastImport;
+      if (ind) {
+        ind.textContent = 'Saved ✓';
+        ind.style.color = 'var(--vf-success-text)';
+        setTimeout(() => { if (ind.textContent === 'Saved ✓') ind.textContent = ''; }, 2000);
+      }
+      renderMrpSetupKpis();
+    } catch (e) {
+      if (ind) {
+        ind.textContent = 'Save failed: ' + e.message;
+        ind.style.color = 'var(--vf-danger-text)';
+      }
+    }
+  }, 300);
+}
+
+async function runMrpExpand() {
+  const sku = document.getElementById('mrp-expand-sku').value.trim();
+  const qty = parseFloat(document.getElementById('mrp-expand-qty').value);
+  const wastage = document.getElementById('mrp-expand-wastage').checked;
+  const out = document.getElementById('mrp-expand-result');
+  if (!sku || !isFinite(qty)) {
+    out.innerHTML = '<div class="warn" style="margin-top:8px;">Enter a parent SKU and a numeric qty.</div>';
+    return;
+  }
+  out.innerHTML = '<div style="font-size:12px;color:var(--vf-text-tertiary);margin-top:8px;">Expanding…</div>';
+  try {
+    const r = await fetch('/api/boms/expand?sku=' + encodeURIComponent(sku) + '&qty=' + qty + (wastage?'':'&wastage=0'));
+    const j = await r.json();
+    if (!j.ok) { out.innerHTML = '<div class="warn" style="margin-top:8px;">' + escapeHtml(j.error||'Expand failed') + '</div>'; return; }
+    const leaves = Object.values(j.leaves).sort((a,b) => b.qty - a.qty);
+    const settings = (mrpSupplyData||{}).perSku || {};
+    out.innerHTML = `
+      <div style="margin-top:var(--vf-space-3);">
+        <div style="font-size:var(--vf-text-sm);color:var(--vf-text-secondary);margin-bottom:var(--vf-space-2);">${leaves.length} leaf RM${leaves.length===1?'':'s'} needed for ${qty.toLocaleString()} units of ${escapeHtml(sku)} · recursion went ${j.intermediates.length} WIP level${j.intermediates.length===1?'':'s'} deep</div>
+        <table class="status-table">
+          <thead><tr><th>Leaf SKU</th><th style="text-align:right;">Qty needed</th><th>Lead time</th><th>Notes</th></tr></thead>
+          <tbody>
+            ${leaves.map(l => {
+              const ss = settings[l.sku];
+              const lead = ss && ss.leadTimeDays != null ? ss.leadTimeDays + 'd' : (ss && ss.isContract ? 'contract' : '—');
+              const note = l.isCycle ? '<span class="badge badge-high">cycle detected</span>' : '';
+              return `<tr><td><span class="mo-id">${escapeHtml(l.sku)}</span></td><td style="text-align:right;font-variant-numeric:tabular-nums;">${l.qty.toFixed(2)}</td><td>${lead}</td><td>${note}</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } catch (e) {
+    out.innerHTML = '<div class="warn" style="margin-top:8px;">Network error: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+// ── Live Inventory Tab ───────────────────────────────────────────────────────
+//
+// Pulls the on-hand snapshot from /api/cin7/onhand (which the server populates
+// from Cin7's ProductAvailability endpoint, daily at 06:30 UTC plus on-demand).
+// Phase 1 of the MRP feature — surfaces current stock so users have a live
+// view without uploading a CSV. Future phases will compare this against the
+// production plan's BOM-exploded requirements.
+
+let liveInventoryData = null;
+
+async function loadLiveInventory() {
+  // Show admin-only sync button
+  const btn = document.getElementById('live-inv-sync-btn');
+  if (btn) btn.style.display = (currentUser && currentUser.role === 'admin') ? 'inline-flex' : 'none';
+  try {
+    const r = await fetch('/api/cin7/onhand');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    liveInventoryData = await r.json();
+  } catch (e) {
+    liveInventoryData = { ok: false, lastSync: null, bySku: [], rows: [] };
+  }
+  renderLiveInventory();
+}
+
+async function syncLiveInventory() {
+  const btn = document.getElementById('live-inv-sync-btn');
+  const ts  = document.getElementById('live-inv-ts');
+  if (btn) { btn.disabled = true; btn.textContent = '⟳ Syncing…'; }
+  if (ts) ts.textContent = 'Syncing from Cin7…';
+  try {
+    const r = await fetch('/api/cin7/onhand/sync', { method: 'POST' });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    await loadLiveInventory();
+  } catch (e) {
+    alert('Sync failed: ' + e.message);
+    if (ts) ts.textContent = 'Sync failed — ' + e.message;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '⟳ Sync from Cin7'; }
+}
+
+function renderLiveInventory() {
+  if (!liveInventoryData) return;
+  const { lastSync, bySku, rows, rowCount, skuCount } = liveInventoryData;
+  const tsEl = document.getElementById('live-inv-ts');
+  const empty = document.getElementById('live-inv-empty');
+  const thead = document.getElementById('live-inv-thead');
+  const tbody = document.getElementById('live-inv-tbody');
+  const kpis = document.getElementById('live-inv-kpis');
+
+  if (!lastSync) {
+    if (tsEl) tsEl.textContent = '';
+    if (empty) empty.style.display = 'block';
+    if (thead) thead.innerHTML = '';
+    if (tbody) tbody.innerHTML = '';
+    if (kpis) kpis.innerHTML = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  const d = new Date(lastSync);
+  const ageMin = Math.round((Date.now() - d.getTime()) / 60000);
+  const ageStr = ageMin < 60 ? `${ageMin} min ago` : ageMin < 1440 ? `${Math.round(ageMin/60)} hr ago` : `${Math.round(ageMin/1440)} days ago`;
+  if (tsEl) tsEl.textContent = `Last synced ${d.toLocaleString()} (${ageStr}) · ${(rowCount||0).toLocaleString()} rows · ${(skuCount||0).toLocaleString()} SKUs`;
+
+  const search = (document.getElementById('live-inv-search').value || '').toLowerCase();
+  const aggregate = document.getElementById('live-inv-aggregate').checked;
+  const hideZero = document.getElementById('live-inv-hide-zero').checked;
+
+  // KPIs
+  const skus = bySku || [];
+  const totalSkus = skus.length;
+  const skusWithStock = skus.filter(s => s.onHand > 0).length;
+  const skusOnOrder = skus.filter(s => s.onOrder > 0).length;
+  const totalUnits = skus.reduce((sum, s) => sum + (s.onHand || 0), 0);
+  if (kpis) kpis.innerHTML = [
+    { label: 'SKUs tracked',    val: totalSkus.toLocaleString(),                                accent: '' },
+    { label: 'SKUs in stock',   val: skusWithStock.toLocaleString(),                            accent: 'var(--vf-success-base)' },
+    { label: 'SKUs on order',   val: skusOnOrder.toLocaleString(),                              accent: 'var(--vf-info-base)' },
+    { label: 'Total units on hand', val: Math.round(totalUnits).toLocaleString(),               accent: 'var(--vf-cat-gray-base)' },
+  ].map(s => `<div class="metric" style="${s.accent?'border-left:3px solid '+s.accent+';':''}"><div class="metric-label">${s.label}</div><div class="metric-value">${s.val}</div></div>`).join('');
+
+  // Table
+  if (aggregate) {
+    if (thead) thead.innerHTML = '<tr><th>SKU</th><th>Name</th><th>Locations</th><th>Batches</th><th style="text-align:right;">On hand</th><th style="text-align:right;">Allocated</th><th style="text-align:right;">Available</th><th style="text-align:right;">On order</th><th style="text-align:right;">In transit</th></tr>';
+    let filtered = (skus || []).filter(s => {
+      if (hideZero && s.onHand === 0 && s.onOrder === 0 && s.inTransit === 0) return false;
+      if (search) {
+        const hay = ((s.sku||'') + ' ' + (s.name||'')).toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
+    filtered.sort((a,b) => (b.onHand||0) - (a.onHand||0));
+    if (tbody) tbody.innerHTML = filtered.length === 0
+      ? `<tr><td colspan="9" class="empty">No SKUs match.</td></tr>`
+      : filtered.map(s => `<tr>
+          <td><span class="mo-id">${escapeHtml(s.sku)}</span></td>
+          <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(s.name||'')}">${escapeHtml(s.name||'—')}</td>
+          <td style="font-size:11px;color:var(--vf-text-secondary);">${escapeHtml((s.locations||[]).join(', ')||'—')}</td>
+          <td style="text-align:right;font-size:12px;">${s.batches||0}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${(s.onHand||0).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;color:${s.allocated>0?'var(--vf-warning-text)':'var(--vf-text-tertiary)'};">${(s.allocated||0).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;">${(s.available||0).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;color:${s.onOrder>0?'var(--vf-info-text)':'var(--vf-text-tertiary)'};">${(s.onOrder||0).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;color:${s.inTransit>0?'var(--vf-info-text)':'var(--vf-text-tertiary)'};">${(s.inTransit||0).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+        </tr>`).join('');
+  } else {
+    if (thead) thead.innerHTML = '<tr><th>SKU</th><th>Name</th><th>Location</th><th>Batch</th><th>Expiry</th><th style="text-align:right;">On hand</th><th style="text-align:right;">Allocated</th><th style="text-align:right;">Available</th><th style="text-align:right;">On order</th></tr>';
+    let filtered = (rows || []).filter(r => {
+      if (hideZero && (r.OnHand||0) === 0 && (r.OnOrder||0) === 0) return false;
+      if (search) {
+        const hay = ((r.SKU||'') + ' ' + (r.Name||'') + ' ' + (r.Batch||'')).toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
+    filtered.sort((a,b) => (b.OnHand||0) - (a.OnHand||0));
+    if (tbody) tbody.innerHTML = filtered.length === 0
+      ? `<tr><td colspan="9" class="empty">No rows match.</td></tr>`
+      : filtered.slice(0, 1000).map(r => `<tr>
+          <td><span class="mo-id">${escapeHtml(r.SKU||'—')}</span></td>
+          <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r.Name||'')}">${escapeHtml(r.Name||'—')}</td>
+          <td style="font-size:11px;color:var(--vf-text-secondary);">${escapeHtml(r.Location||'—')}</td>
+          <td style="font-size:11px;color:var(--vf-text-tertiary);">${escapeHtml(r.Batch||'—')}</td>
+          <td style="font-size:11px;color:var(--vf-text-tertiary);">${r.ExpiryDate ? r.ExpiryDate.slice(0,10) : '—'}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${(r.OnHand||0).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${(r.Allocated||0).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:500;">${(r.Available||0).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${(r.OnOrder||0).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+        </tr>`).join('') + (filtered.length > 1000 ? `<tr><td colspan="9" style="text-align:center;color:var(--vf-text-tertiary);font-size:11px;">…and ${filtered.length - 1000} more rows. Refine search to narrow.</td></tr>` : '');
+  }
+}
+
 // ── MO Status Tab ────────────────────────────────────────────────────────────
 
 const MO_STATUS_MACHINE_LABELS = {
@@ -1240,6 +3133,37 @@ function populateMOStatusMachineFilter() {
   });
 }
 
+// MO Status table sort state — persists across re-renders within the session
+let mrpStatusSortKey = null;     // null → default composite sort (status group, then start)
+let mrpStatusSortDir = 'asc';    // 'asc' or 'desc'
+
+function sortMoStatus(key) {
+  if (mrpStatusSortKey === key) {
+    if (mrpStatusSortDir === 'asc') mrpStatusSortDir = 'desc';
+    else { mrpStatusSortKey = null; mrpStatusSortDir = 'asc'; } // third click = reset
+  } else {
+    mrpStatusSortKey = key;
+    mrpStatusSortDir = 'asc';
+  }
+  renderMOStatus();
+}
+
+function updateMoStatusSortArrows() {
+  document.querySelectorAll('#mo-status-thead .mo-status-sort').forEach(th => {
+    const key = th.getAttribute('data-key');
+    const arrow = th.querySelector('.sort-arrow');
+    if (!arrow) return;
+    if (key === mrpStatusSortKey) {
+      arrow.textContent = mrpStatusSortDir === 'asc' ? '↑' : '↓';
+      arrow.style.color = 'var(--vf-brand-orange)';
+      th.style.color = 'var(--vf-text-primary)';
+    } else {
+      arrow.textContent = '';
+      th.style.color = '';
+    }
+  });
+}
+
 async function renderMOStatus() {
   const search  = (document.getElementById('mo-status-search').value || '').toLowerCase();
   const machine = document.getElementById('mo-status-machine').value;
@@ -1255,59 +3179,129 @@ async function renderMOStatus() {
   const hasInvData = Object.keys(moMovements).length > 0;
   document.getElementById('mo-status-no-inv').style.display = hasInvData ? 'none' : 'block';
 
-  // Build row data
-  const rows = orders.map(o => {
+  // Build row data — collapse rows that share an MO number into a single
+  // row, summing planned qty across all scheduled days/operations and
+  // listing every distinct machine the MO touches. Orders without a real
+  // MO number (TBD-* placeholders, blank IDs) stay as one row each.
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Phase 1: bucket by MO ID (or by per-order id for non-MO rows)
+  const buckets = new Map();
+  orders.forEach(o => {
     const moMatch = (o.orderId || '').match(/MO-\d+/);
-    const moId    = moMatch ? moMatch[0] : null;
-    const inv     = moId ? moMovements[moId] : null;
-    const planned = o.qty || 0;
-    const actual  = inv ? (inv.totalIn || 0) : 0;
-    const pct     = planned > 0 ? Math.min(Math.round(actual / planned * 100), 999) : null;
-
-    // Determine status
-    let status = o.status || 'queued';
-    if (hasInvData) {
-      if (status !== 'on-hold') {
-        if (actual === 0)                     status = 'not-started';
-        else if (planned === 0 && actual > 0) status = 'complete';
-        else if (!planned || pct < 85)        status = 'in-progress';
-        else                                  status = 'complete';
-      }
-    }
-    if (!moId) status = 'no-mo';
-
-    // Tracking: only applies once start date has passed
-    const today = new Date().toISOString().slice(0, 10);
-    let tracking = null;
-    if (o.start && o.start <= today) {
-      const isComplete = (status === 'complete');
-      if (isComplete)                         tracking = 'on-track';
-      else if (o.end && o.end < today)        tracking = 'off-track';
-      else                                    tracking = 'on-track'; // started, end date not yet passed
-    }
-
-    return { o, moId, inv, planned, actual, pct, status, tracking };
+    const key = moMatch ? moMatch[0] : ('order:' + o.id);
+    if (!buckets.has(key)) buckets.set(key, { moId: moMatch ? moMatch[0] : null, items: [] });
+    buckets.get(key).items.push(o);
   });
+
+  // Phase 2: turn each bucket into a single row
+  const rows = [];
+  for (const { moId, items } of buckets.values()) {
+    // Use o.total (qty × batches) per row, with a fallback for legacy rows
+    const planned = items.reduce((s, o) => {
+      const rowPlanned = (o.total != null && o.total > 0)
+        ? o.total
+        : (o.qty || 0) * (o.batches || 1);
+      return s + rowPlanned;
+    }, 0);
+    const inv     = moId ? moMovements[moId] : null;
+    // Manual actualQty override on any row wins over inventory-derived totalIn.
+    // If multiple rows of the same MO each set actualQty (rare), we sum them.
+    const manualActuals = items
+      .map(o => (o.actualQty != null && o.actualQty !== '' && isFinite(o.actualQty)) ? Number(o.actualQty) : null)
+      .filter(v => v != null);
+    const actual = manualActuals.length > 0
+      ? manualActuals.reduce((s, v) => s + v, 0)
+      : (inv ? (inv.totalIn || 0) : 0);
+    const actualSource = manualActuals.length > 0 ? 'manual' : (inv ? 'inventory' : 'none');
+    const pct = planned > 0 ? Math.min(Math.round(actual / planned * 100), 999) : null;
+
+    // Earliest start, latest end across all rows
+    const starts = items.map(o => o.start).filter(Boolean).sort();
+    const ends   = items.map(o => o.end || o.due).filter(Boolean).sort();
+    const start = starts[0] || null;
+    const end   = ends[ends.length - 1] || null;
+
+    // Distinct machines (preserve insertion order, deduped)
+    const machineKeys = [...new Set(items.map(o => o.machine).filter(Boolean))];
+    const machineLabel = machineKeys.length === 0
+      ? '—'
+      : machineKeys.map(m => MO_STATUS_MACHINE_LABELS[m] || m).join(' · ');
+
+    // Pick a representative SKU + orderId for display
+    const sku = items.find(o => o.sku)?.sku || '';
+    const displayOrderId = moId || (items[0].orderId || '—');
+
+    // Status precedence across the bucket. The user's manual status wins
+    // over the inventory-derived check — important for abandoned-MO scenarios
+    // where actual production is far below the original plan but the order
+    // was deliberately closed out.
+    //   on-hold > manual complete > derived-from-inventory > stored status
+    const allOnHold = items.every(o => o.status === 'on-hold');
+    const anyComplete = items.some(o => o.status === 'complete');
+    let status;
+    if (allOnHold) {
+      status = 'on-hold';
+    } else if (anyComplete) {
+      status = 'complete';
+    } else if (hasInvData && moId) {
+      if (actual === 0)                                       status = 'not-started';
+      else if (planned === 0 && actual > 0)                   status = 'complete';
+      else if (!planned || pct < 85)                          status = 'in-progress';
+      else                                                    status = 'complete';
+    } else {
+      // Mixed/no inventory — promote highest-progress status from items
+      const stored = items.map(o => o.status || 'queued');
+      if      (stored.includes('in-progress'))                status = 'in-progress';
+      else if (stored.every(s => s === 'queued'))             status = 'not-started';
+      else                                                    status = stored[0];
+    }
+    if (!moId && !displayOrderId.startsWith('MO-'))           status = 'no-mo';
+
+    // Tracking: only applies once the earliest start date has passed
+    let tracking = null;
+    if (start && start <= today) {
+      const isComplete = (status === 'complete');
+      if (isComplete)                                         tracking = 'on-track';
+      else if (end && end < today)                            tracking = 'off-track';
+      else                                                    tracking = 'on-track';
+    }
+
+    rows.push({
+      o: { ...items[0], orderId: displayOrderId, sku, machine: machineKeys[0] || '', start, end },
+      moId, inv, planned, actual, actualSource, pct, status, tracking,
+      itemCount: items.length,
+      machineLabel,
+    });
+  }
 
   // Summary counts
   const counts = { 'not-started': 0, 'in-progress': 0, 'complete': 0, 'on-hold': 0, 'no-mo': 0 };
   rows.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
 
+  // Semantic accent colors per design guide: in-progress = info, complete = success.
+  // "Tracked units" = collapsed buckets (one per MO + one per non-MO row),
+  // matching what the table below shows.
   document.getElementById('mo-status-summary').innerHTML = [
-    { label:'Total orders', val: orders.length,          color:'' },
-    { label:'Not started',  val: counts['not-started'],  color:'#111820' },
-    { label:'In progress',  val: counts['in-progress'],  color:'#0a1c38' },
-    { label:'Complete',     val: counts['complete'],      color:'#082818' },
+    { label:'Tracked units', val: rows.length,           accent: '' },
+    { label:'Not started',   val: counts['not-started'], accent: 'var(--vf-cat-gray-base)' },
+    { label:'In progress',   val: counts['in-progress'], accent: 'var(--vf-info-base)' },
+    { label:'Complete',      val: counts['complete'],    accent: 'var(--vf-success-base)' },
   ].map(s => `
-    <div class="metric" style="${s.color?'background:'+s.color:''}">
+    <div class="metric" style="${s.accent?'border-left:3px solid '+s.accent+';':''}">
       <div class="metric-label">${s.label}</div>
       <div class="metric-value">${s.val}</div>
     </div>`).join('');
 
-  // Filter rows
+  // Filter rows — machine filter matches if ANY of the bucket's machines matches
   const filtered = rows.filter(r => {
-    if (machine && r.o.machine !== machine) return false;
-    if (filter  && r.status !== filter)     return false;
+    if (machine) {
+      const machineKeys = r.machineLabel ? r.machineLabel : '';
+      // Check the original items via re-bucket (machineKeys aren't preserved on r directly)
+      // — simpler: just check the single representative machine OR look at the joined label
+      if (!(r.o.machine === machine || (r.machineLabel && r.machineLabel.includes(MO_STATUS_MACHINE_LABELS[machine] || machine)))) return false;
+    }
+    if (filter && r.status !== filter) return false;
     if (search) {
       const hay = ((r.moId || '') + ' ' + (r.o.sku || '') + ' ' + (r.o.orderId || '')).toLowerCase();
       if (!hay.includes(search)) return false;
@@ -1315,12 +3309,32 @@ async function renderMOStatus() {
     return true;
   });
 
-  // Sort: in-progress first, then not-started, then complete, then no-mo
-  const ORDER = {'in-progress':0,'not-started':1,'on-hold':2,'complete':3,'no-mo':4};
-  filtered.sort((a,b) => {
-    const so = (ORDER[a.status]??5) - (ORDER[b.status]??5);
-    if (so !== 0) return so;
-    return (a.o.start || '').localeCompare(b.o.start || '');
+  // Default sort: in-progress first, then not-started, then complete, then no-mo
+  const STATUS_ORDER = {'in-progress':0,'not-started':1,'on-hold':2,'complete':3,'no-mo':4};
+  const sortKey = mrpStatusSortKey || 'default';
+  const sortDir = mrpStatusSortDir || 'asc';
+  const cmp = (a, b) => {
+    let av, bv;
+    switch (sortKey) {
+      case 'mo':       av = a.moId || a.o.orderId || ''; bv = b.moId || b.o.orderId || ''; return av.localeCompare(bv);
+      case 'sku':      av = a.o.sku || ''; bv = b.o.sku || ''; return av.localeCompare(bv);
+      case 'machine':  av = a.machineLabel || ''; bv = b.machineLabel || ''; return av.localeCompare(bv);
+      case 'dates':    av = a.o.start || ''; bv = b.o.start || ''; return av.localeCompare(bv);
+      case 'planned':  return (a.planned || 0) - (b.planned || 0);
+      case 'actual':   return (a.actual || 0) - (b.actual || 0);
+      case 'pct':      return (a.pct ?? -1) - (b.pct ?? -1);
+      case 'status':   return (STATUS_ORDER[a.status] ?? 5) - (STATUS_ORDER[b.status] ?? 5);
+      case 'tracking': av = a.tracking || ''; bv = b.tracking || ''; return av.localeCompare(bv);
+      default:
+        // Composite default: status group, then start date
+        const so = (STATUS_ORDER[a.status] ?? 5) - (STATUS_ORDER[b.status] ?? 5);
+        if (so !== 0) return so;
+        return (a.o.start || '').localeCompare(b.o.start || '');
+    }
+  };
+  filtered.sort((a, b) => {
+    const r = cmp(a, b);
+    return sortDir === 'desc' ? -r : r;
   });
 
   const statusBadge = s => {
@@ -1341,25 +3355,29 @@ async function renderMOStatus() {
   const fmtQty = q => q > 0 ? q.toLocaleString() + ' kg' : '—';
 
   document.getElementById('mo-status-tbody').innerHTML = filtered.length === 0
-    ? `<tr><td colspan="8" class="empty">No orders match the current filters.</td></tr>`
-    : filtered.map(({ o, moId, actual, planned, pct, status, tracking }) => {
+    ? `<tr><td colspan="9" class="empty">No orders match the current filters.</td></tr>`
+    : filtered.map(({ o, moId, actual, actualSource, planned, pct, status, tracking, itemCount, machineLabel }) => {
         const moCell = moId
-          ? `<span class="mo-id">${moId}</span>`
+          ? `<span class="mo-id">${moId}</span>${itemCount > 1 ? `<div style="font-size:10px;color:var(--vf-text-tertiary);margin-top:2px;">${itemCount} scheduled rows</div>` : ''}`
           : `<span class="tbd-id">${escapeHtml(o.orderId || '—')}</span>`;
-        const machLabel = MO_STATUS_MACHINE_LABELS[o.machine] || o.machine || '—';
-        const dateRange = (o.start && o.end)
+        const dateRange = (o.start && o.end && o.start !== o.end)
           ? `${o.start} → ${o.end}`
           : (o.start || o.end || '—');
-        const progressCell = (moId && hasInvData && planned > 0)
+        // Manual actualQty counts as data even when no inventory upload exists
+        const hasActualForRow = (moId && hasInvData) || actualSource === 'manual';
+        const progressCell = (hasActualForRow && planned > 0)
           ? `<div class="progress-bar-wrap"><div class="progress-bar-fill${pct>100?' over':pct>=85?' near':''}" style="width:${Math.min(pct,100)}%"></div></div>${pct}%`
-          : `<span style="color:var(--color-text-tertiary);font-size:11px;">—</span>`;
+          : `<span style="color:var(--vf-text-tertiary);font-size:11px;">—</span>`;
+        const actualCell = hasActualForRow
+          ? `${fmtQty(actual)}${actualSource === 'manual' ? '<div style="font-size:10px;color:var(--vf-text-tertiary);">manual override</div>' : ''}`
+          : '—';
         return `<tr>
           <td>${moCell}</td>
           <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(o.sku||'')}">${escapeHtml(o.sku||'—')}</td>
-          <td>${machLabel}</td>
+          <td style="font-size:12px;">${escapeHtml(machineLabel)}</td>
           <td style="white-space:nowrap;font-size:12px;">${dateRange}</td>
           <td style="text-align:right;">${fmtQty(planned)}</td>
-          <td style="text-align:right;">${moId && hasInvData ? fmtQty(actual) : '—'}</td>
+          <td style="text-align:right;">${actualCell}</td>
           <td style="white-space:nowrap;">${progressCell}</td>
           <td>${statusBadge(status)}</td>
           <td>${status === 'no-mo'        ? '<span class="badge badge-queued">MO needs to be added</span>'
@@ -1368,6 +3386,7 @@ async function renderMOStatus() {
               : ''}</td>
         </tr>`;
       }).join('');
+  updateMoStatusSortArrows();
 }
 
 async function confirmImport(){
@@ -1393,7 +3412,9 @@ async function confirmImport(){
     }
   });
 
-  await persist();render();renderCal();
+  await persist('excel-import');
+  await loadInventoryCompletion(); // re-derive completed-MO set against newly-imported orders
+  render();renderCal();
   closeImportModal();
 
   const n=document.getElementById('notice');
@@ -1468,11 +3489,28 @@ function renderAIMessages(displayHistory) {
     container.innerHTML = '<div class="ai-empty">Ask me to update the schedule.<br>e.g. "West Mac went down — shift all orders 3 days forward"</div>';
     return;
   }
-  container.innerHTML = displayHistory.map(m => {
+  container.innerHTML = displayHistory.map((m, i) => {
     const cls = m.role === 'user' ? 'user' : (m.error ? 'error' : 'assistant');
-    return `<div class="ai-msg ${cls}">${escapeHtml(m.text)}</div>`;
+    let body = escapeHtml(m.text);
+    if (m.jumpToDate) {
+      body += `<div style="margin-top:6px;"><button class="btn btn-sm btn-primary" onclick="aiJumpToDate('${m.jumpToDate}')" style="font-size:11px;padding:4px 10px;">Jump to ${m.jumpToDate}</button></div>`;
+    }
+    return `<div class="ai-msg ${cls}">${body}</div>`;
   }).join('');
   container.scrollTop = container.scrollHeight;
+}
+
+// Helper for the AI hint that surfaces when a created order falls outside
+// the current calendar window. Switches to the Calendar tab and shifts the
+// 4-week view so the target date is in frame.
+function aiJumpToDate(dateStr) {
+  const target = new Date(dateStr + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const monToday = getMon(today);
+  const diffDays = Math.round((target - monToday) / 86400000);
+  calOffset = Math.floor(diffDays / 7);
+  switchTab('calendar');
+  renderCal();
 }
 
 const AI_THINKING_MSGS = [
@@ -1564,11 +3602,42 @@ async function sendAIMessage() {
     if (data.ok) {
       aiMessages = data.messages;   // adopt server's full conversation (includes tool results)
       aiDisplayHistory.push({ role: 'assistant', text: data.reply });
-      // If Claude made changes, refresh the UI
-      if (data.reply && /shifted|updated|changed|moved|set.*status|deleted|quantity|created order/i.test(data.reply)) {
-        await loadData();
+      // Server tells us explicitly whether any mutating tool ran; refresh
+      // local state if so. Replaces the old fragile reply-text regex match
+      // (which missed cases like "all three orders are confirmed in the
+      // backend" because none of the trigger keywords were present).
+      if (data.dataChanged) {
+        const beforeIds = new Set(orders.map(o => o.id));
+        // Reload orders from the server (the AI tools mutate them server-side
+        // via vf_orders writes, but our local 'orders' array is stale).
+        const fresh = await serverGet('vf_orders');
+        if (Array.isArray(fresh)) orders = fresh;
+        await loadInventoryCompletion();
         render();
         renderCal();
+        // Find any newly-added orders and, if the earliest is outside the
+        // current calendar window, surface a hint so the user doesn't think
+        // the chatbot did nothing visually. Only triggers when an add_order
+        // tool ran — irrelevant for status/qty updates of visible orders.
+        if ((data.mutatedTools || []).includes('add_order')) {
+          const newOrders = orders.filter(o => !beforeIds.has(o.id) && o.start);
+          if (newOrders.length) {
+            const earliest = newOrders.map(o => o.start).sort()[0];
+            const target = new Date(earliest + 'T00:00:00');
+            const today = new Date(); today.setHours(0,0,0,0);
+            const monToday = getMon(today);
+            const visStart = addDays(monToday, calOffset * 7);
+            const visEnd   = addDays(visStart, 27);
+            if (target < visStart || target > visEnd) {
+              const fmt = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+              aiDisplayHistory.push({
+                role: 'assistant',
+                text: `(${newOrders.length} new order${newOrders.length === 1 ? '' : 's'} created starting ${fmt(target)} — outside the current 4-week view. Click below to jump there.)`,
+                jumpToDate: earliest,
+              });
+            }
+          }
+        }
       }
     } else {
       aiDisplayHistory.push({ role: 'assistant', error: true, text: 'Error: ' + (data.error || 'Unknown error') });

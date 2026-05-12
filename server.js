@@ -1,6 +1,7 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const multer = require("multer");
 const XLSX = require("xlsx");
 const Anthropic = require("@anthropic-ai/sdk");
@@ -56,15 +57,36 @@ function parseDate(raw) {
   return null;
 }
 
+// Words that, when they immediately follow a "<number> kg" token, indicate the
+// number is a PACKAGE SIZE (bag-in-box, drum, pouch, etc.) — not the
+// production quantity. Critical: the previous parser greedily matched any
+// "X kg" and any leading number, so notes like "Packout · 25kg BIB" set the
+// order qty to 25 (the BIB size), and notes like "Grinding · 7-day cycle"
+// set it to 7 (the day count). The fix: only accept kg/MT matches that are
+// NOT followed by these package words, then take the largest.
+const PACKAGE_WORD_RE = /^\s*(BIB|drum|pouch|tote|sack|bag|box|pail|jar|case|bottle)/i;
+
 function parseQty(raw) {
   if (!raw) return 0;
   const s = String(raw).replace(/,/g, "");
-  const mt = s.match(/(\d+(?:\.\d+)?)\s*MT\b/i);
-  if (mt) return Math.round(parseFloat(mt[1]) * 1000);
-  const kg = s.match(/(\d+(?:\.\d+)?)\s*kg\b/i);
-  if (kg) return Math.round(parseFloat(kg[1]));
-  const n = s.match(/(\d+(?:\.\d+)?)/);
-  return n ? Math.round(parseFloat(n[1])) : 0;
+  const candidates = [];
+  // Match "X MT" — convert to kg
+  const mtRe = /(\d+(?:\.\d+)?)\s*MT\b/gi;
+  let m;
+  while ((m = mtRe.exec(s)) !== null) {
+    const trailing = s.slice(mtRe.lastIndex);
+    if (!PACKAGE_WORD_RE.test(trailing)) candidates.push(parseFloat(m[1]) * 1000);
+  }
+  // Match "X kg" — exclude when followed by a package word
+  const kgRe = /(\d+(?:\.\d+)?)\s*kg\b/gi;
+  while ((m = kgRe.exec(s)) !== null) {
+    const trailing = s.slice(kgRe.lastIndex);
+    if (!PACKAGE_WORD_RE.test(trailing)) candidates.push(parseFloat(m[1]));
+  }
+  if (!candidates.length) return 0;
+  // Production qty is the largest kg-tagged number on the line (e.g. 4,300 kg
+  // wins over a stray 50 kg test reference, and certainly over package sizes).
+  return Math.round(Math.max(...candidates));
 }
 
 function detectAttribs(sku, machine) {
@@ -111,6 +133,139 @@ function writeData(key, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+//
+// All /api/* endpoints require a valid session cookie except /api/login and
+// /api/logout. The cookie is an HMAC-signed payload "<userId>.<expiresMs>.<sig>".
+// The hash function below MUST match public/index.html#hashPassword so existing
+// stored user records remain valid.
+
+const SESSION_SECRET   = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+const SESSION_TTL_MS   = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_COOKIE   = "vfsession";
+const IS_PROD          = !!process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === "production";
+
+if (!process.env.SESSION_SECRET) {
+  console.warn("[auth] SESSION_SECRET not set — generated an ephemeral secret. Sessions will be invalidated on every restart. Set SESSION_SECRET in env to fix.");
+}
+
+function hashPassword(pw) {
+  let h = 0;
+  for (let i = 0; i < pw.length; i++) { h = ((h << 5) - h) + pw.charCodeAt(i); h |= 0; }
+  return "h_" + Math.abs(h).toString(36) + "_" + pw.length;
+}
+
+function signSession(userId) {
+  const expires = Date.now() + SESSION_TTL_MS;
+  const payload = `${userId}.${expires}`;
+  const sig = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
+  return `${payload}.${sig}`;
+}
+
+function verifySession(value) {
+  if (!value) return null;
+  const parts = value.split(".");
+  if (parts.length !== 3) return null;
+  const [userId, expiresStr, sig] = parts;
+  const payload = `${userId}.${expiresStr}`;
+  const expected = crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
+  if (sig.length !== expected.length) return null;
+  let sigBuf, expBuf;
+  try { sigBuf = Buffer.from(sig); expBuf = Buffer.from(expected); } catch (e) { return null; }
+  if (!crypto.timingSafeEqual(sigBuf, expBuf)) return null;
+  if (Number(expiresStr) < Date.now()) return null;
+  return userId;
+}
+
+function parseCookies(header) {
+  const out = {};
+  if (!header) return out;
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx === -1) continue;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    out[k] = decodeURIComponent(v);
+  }
+  return out;
+}
+
+function getSessionUserId(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  return verifySession(cookies[SESSION_COOKIE]);
+}
+
+function buildCookie(value, maxAgeSec) {
+  const parts = [
+    `${SESSION_COOKIE}=${encodeURIComponent(value)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${maxAgeSec}`,
+  ];
+  if (IS_PROD) parts.push("Secure");
+  return parts.join("; ");
+}
+
+// Seed a default admin if no users exist yet, so a fresh deploy is loginnable.
+function seedDefaultAdminIfMissing() {
+  const users = readData("vf_users");
+  if (Array.isArray(users) && users.length > 0) return;
+  const defaultUser = {
+    id: "master",
+    username: "productionadmin",
+    password: hashPassword("productionadmin1800"),
+    role: "admin",
+    created: new Date().toISOString().slice(0, 10),
+  };
+  writeData("vf_users", [defaultUser]);
+  console.log("[auth] Seeded default admin user 'productionadmin' (no prior users found).");
+}
+seedDefaultAdminIfMissing();
+
+// Public auth endpoints (registered BEFORE the requireAuth middleware below).
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ ok: false, error: "Missing username or password" });
+  }
+  const users = readData("vf_users") || [];
+  const u = users.find(x => x && x.username && x.username.toLowerCase() === String(username).toLowerCase());
+  if (!u || u.password !== hashPassword(password)) {
+    return res.status(401).json({ ok: false, error: "Invalid credentials" });
+  }
+  res.setHeader("Set-Cookie", buildCookie(signSession(u.id), Math.floor(SESSION_TTL_MS / 1000)));
+  res.json({ ok: true, user: { id: u.id, username: u.username, role: u.role } });
+});
+
+app.post("/api/logout", (req, res) => {
+  res.setHeader("Set-Cookie", buildCookie("", 0));
+  res.json({ ok: true });
+});
+
+// Everything else under /api/* requires authentication, except a small set
+// of webhook endpoints that have their own auth (shared secret in header).
+const SESSION_BYPASS_PATHS = new Set([
+  "/login",
+  "/logout",
+  "/cin7/inventory-movements", // Apps Script auto-sync, gated by X-VF-Sync-Secret
+]);
+app.use("/api", (req, res, next) => {
+  if (SESSION_BYPASS_PATHS.has(req.path)) return next();
+  const userId = getSessionUserId(req);
+  if (!userId) return res.status(401).json({ ok: false, error: "Not authenticated" });
+  req.userId = userId;
+  next();
+});
+
+// GET /api/me — used by the front-end to resume a session on page load.
+app.get("/api/me", (req, res) => {
+  const users = readData("vf_users") || [];
+  const u = users.find(x => x && x.id === req.userId);
+  if (!u) return res.status(401).json({ ok: false, error: "User no longer exists" });
+  res.json({ ok: true, user: { id: u.id, username: u.username, role: u.role } });
+});
+
 // GET data by key
 app.get("/api/data/:key", (req, res) => {
   const key = req.params.key.replace(/[^a-z0-9_-]/gi, "");
@@ -125,11 +280,123 @@ app.get("/api/data/:key", (req, res) => {
 app.put("/api/data/:key", (req, res) => {
   const key = req.params.key.replace(/[^a-z0-9_-]/gi, "");
   try {
+    // Audit: when vf_orders is updated, diff old vs new and append per-change
+    // entries to vf_audit_log. Other keys are written through unchanged.
+    if (key === "vf_orders") {
+      try { auditOrdersChange(readData("vf_orders") || [], req.body.value || [], req); }
+      catch (e) { console.error("[audit] failed to record changes:", e.message); }
+    }
     writeData(key, req.body.value);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
+});
+
+// ── Order audit log ──────────────────────────────────────────────────────────
+//
+// Every PUT to vf_orders runs through auditOrdersChange() which diffs the old
+// and new arrays and appends one or more entries to vf_audit_log. The log is
+// append-only and capped at AUDIT_MAX entries (oldest evicted) so the file
+// can't grow unbounded.
+
+const AUDIT_MAX = 5000;
+const AUDITED_FIELDS = [
+  "orderId", "sku", "due", "start", "end", "cat", "sub", "region", "temper",
+  "machine", "qty", "batches", "total", "status", "priority", "notes",
+  "confirmed", "actualQty",
+];
+
+function actorFromRequest(req) {
+  const users = readData("vf_users") || [];
+  const u = users.find(x => x && x.id === req.userId);
+  return {
+    userId: req.userId || null,
+    userName: u ? u.username : "(unknown)",
+  };
+}
+
+function diffOrder(oldO, newO) {
+  const changes = {};
+  for (const f of AUDITED_FIELDS) {
+    const a = oldO ? oldO[f] : undefined;
+    const b = newO ? newO[f] : undefined;
+    if (a !== b) changes[f] = { from: a == null ? null : a, to: b == null ? null : b };
+  }
+  return changes;
+}
+
+function appendAuditEntries(entries) {
+  if (!entries.length) return;
+  const log = readData("vf_audit_log") || [];
+  log.push(...entries);
+  // Keep only the latest AUDIT_MAX
+  const trimmed = log.length > AUDIT_MAX ? log.slice(log.length - AUDIT_MAX) : log;
+  writeData("vf_audit_log", trimmed);
+}
+
+function auditOrdersChange(oldOrders, newOrders, req) {
+  const actor = actorFromRequest(req);
+  const source = (req.body && typeof req.body.source === "string") ? req.body.source : "manual";
+  const ts = new Date().toISOString();
+  const oldById = new Map(oldOrders.map(o => [o.id, o]));
+  const newById = new Map(newOrders.map(o => [o.id, o]));
+  const entries = [];
+
+  // Created orders
+  for (const [id, o] of newById) {
+    if (!oldById.has(id)) {
+      entries.push({
+        ts, ...actor, source,
+        action: "create",
+        orderId: o.orderId || null,
+        entityId: id,
+        snapshot: pickAuditedFields(o),
+      });
+    }
+  }
+  // Deleted orders
+  for (const [id, o] of oldById) {
+    if (!newById.has(id)) {
+      entries.push({
+        ts, ...actor, source,
+        action: "delete",
+        orderId: o.orderId || null,
+        entityId: id,
+        snapshot: pickAuditedFields(o),
+      });
+    }
+  }
+  // Updated orders
+  for (const [id, newO] of newById) {
+    const oldO = oldById.get(id);
+    if (!oldO) continue;
+    const changes = diffOrder(oldO, newO);
+    if (Object.keys(changes).length === 0) continue;
+    entries.push({
+      ts, ...actor, source,
+      action: "update",
+      orderId: newO.orderId || oldO.orderId || null,
+      entityId: id,
+      changes,
+    });
+  }
+  appendAuditEntries(entries);
+}
+
+function pickAuditedFields(o) {
+  const out = {};
+  for (const f of AUDITED_FIELDS) if (o[f] !== undefined) out[f] = o[f];
+  return out;
+}
+
+// GET /api/audit-log — recent entries (admin only)
+// requireAdmin is hoisted (function declaration) — defined further below.
+app.get("/api/audit-log", (req, res, next) => requireAdmin(req, res, next), (req, res) => {
+  const log = readData("vf_audit_log") || [];
+  // Newest first, limit 500 by default
+  const limit = Math.min(parseInt(req.query.limit, 10) || 500, AUDIT_MAX);
+  res.json({ ok: true, total: log.length, entries: log.slice(-limit).reverse() });
 });
 
 // POST /api/import-excel/parse — parse an uploaded .xlsx production schedule
@@ -173,7 +440,7 @@ app.post("/api/import-excel/parse", upload.single("file"), (req, res) => {
             orderId: mo, sku: rawSKU,
             machine: MASS_MACHINES[idx] || "conching",
             start, end, qty, batches: 1, total: qty,
-            ...attribs, status: "queued", priority: "med", due: end, notes: rawNotes,
+            ...attribs, status: "queued", priority: "med", due: end, notes: rawNotes, confirmed: false,
           });
         });
       } else {
@@ -188,7 +455,7 @@ app.post("/api/import-excel/parse", upload.single("file"), (req, res) => {
           orderId, sku: rawSKU,
           machine: machKey === "MULTI" ? "conching" : machKey,
           start, end, qty, batches: 1, total: qty,
-          ...attribs, status: "queued", priority: "med", due: end, notes,
+          ...attribs, status: "queued", priority: "med", due: end, notes, confirmed: false,
         });
       }
     }
@@ -209,27 +476,52 @@ Machines (use these exact keys):
 - Zone 1 Seed prep: seed_clean (Seed Cleaning), roaster (Alk/Roaster)
 - Zone 1 Mcintyres: east_mac (East Mac CBS), west_mac (West Mac CBE), mac_1250 (1250 Mac), mac_packout (Mac Packout), pouching (Pouching)
 - Zone 2 Chocolate: fat_melter (Fat Melter), refining (Refining), conching (Conching), depositing (Depositing)
+- Zone 2 Other: grinder (Ground BFC line — 1,000 kg per 2-hr shift)
 
 Capacity & runtime constraints (apply these when recommending slots):
 - east_mac / west_mac (Mcintyres): Runtime 12 days. Min 2,250 kg / Max 4,300 kg per batch. EU and US products cannot be mixed on the same run.
 - refining: Runtime 1 day. Max capacity 6,000 kg/day (4 batches × 1,500 kg). Min 500 kg per batch.
 - conching: Runtime 1 day. Min 3,000 kg / Max 6,000 kg per run.
 - roaster: ~325 kg per batch, up to ~4 batches/shift (~1,300 kg/day).
-- fat_melter: 24 hr melt cycle. Runs simultaneously with liquor melting.
+- fat_melter: CBE-based fat 24 hr melt cycle; CBS-based fat 72 hr. Runs simultaneously with liquor melting.
 - Liquor melting (pre-conching): 72 hr.
-- Finished chocolate pipeline: roasting → fat melting (24 hr, parallel with liquor melting 72 hr) → refining (1 day) → conching (1 day) → depositing.
-- Liquor pipeline: roasting → fat melting (24 hr) → Mcintyre (12 days) → packout.
+
+PRODUCTION RECIPE PIPELINE (read carefully — quantities scale DOWN through the chain, not 1:1):
+
+Finished Chocolate (CFC) requires (in this backward order):
+  4. CFC FG ← refining → conching → depositing (Zone 2 chocolate line; ~3 days end-to-end)
+  3. Liquor (10–20% of the FG recipe by weight, recipe-dependent)
+  2. Liquor itself ← Mcintyre run (12 day cycle, east_mac CBS / west_mac CBE)
+  1. Liquor BOM = ~70% roasted seeds + ~30% melted fat
+       ↳ Roasted seeds ← roaster
+       ↳ Melted fat ← fat_melter (24 hr CBE / 72 hr CBS)
+
+So 7,000 kg of finished CFC ≠ 7,000 kg of every input. Rough sanity check:
+  - 7,000 kg CFC needs ~700–1,400 kg of liquor (10–20%)
+  - That liquor needs ~490–980 kg roasted seeds (70% of liquor)
+  - Plus ~210–420 kg melted fat (30% of liquor)
+  - The remaining ~5,600–6,300 kg of CFC weight comes from sugar, packaging, flavorings, etc. as defined in the FG's BOM.
+
+Liquor (sold-as-is) production: roasting → fat melting (24/72 hr) → Mcintyre (12 days) → packout. Liquor IS made on the Mcintyre, not on the chocolate line.
+
+CRITICAL: DO NOT recommend production schedules using straight-line 1:1 scaling of the requested FG qty through every upstream stage. ALWAYS call bom_expand FIRST for any multi-stage production planning so you have BOM-driven quantities at each step. If the user names a product loosely (e.g. "CFC 506 EU"), use find_bom to resolve to the actual SKU before bom_expand.
 
 Order statuses: queued, in-progress, complete, on-hold
 Order priorities: high, med, low
+Order confirmation: 'confirmed' boolean (default false on new). Tentative orders get visual cue on calendar but are still real schedule entries.
 
-When recommending a production slot:
+When recommending a production slot for a finished good or WIP:
 1. Call get_orders to see what's currently scheduled.
-2. Call find_available_slots for the relevant machine(s) to identify open windows.
-3. Check that the requested quantity fits within machine capacity constraints above.
-4. If the product requires multiple machines (e.g. finished chocolate), find slots across the full pipeline.
-5. Present 2–3 concrete options (with start/end dates) and explain the trade-offs.
-6. Do NOT book anything — only recommend. The user must ask you to create or update an order to make it happen.
+2. If the user's product reference is loose, call find_bom to get the right SKU.
+3. Call bom_expand to get per-stage quantities and the upstream WIPs that must be produced. The intermediateStages array tells you each stage's machine + its production lead time.
+4. For multi-stage products, schedule BACKWARD from the desired completion date:
+   - Last step (e.g. depositing) ends at the target completion date
+   - Each upstream stage must finish before its downstream stage starts (i.e. work the lead times backward)
+   - Roasting + fat melting can run in parallel (both feed Mcintyre in the liquor case, or feed downstream stages directly for CFC)
+5. Check that each stage's required qty fits within that machine's capacity constraints above.
+6. Use find_available_slots (or get_orders + reason about gaps) to pick concrete dates that don't collide with existing scheduled work.
+7. Present 2–3 concrete options spanning the full pipeline (each option = a complete set of stage dates) and explain the trade-offs (lead time risk, fat type, batch size fit, etc.).
+8. Do NOT book anything — only recommend. The user must ask you to create or update orders to make it happen.
 
 IMPORTANT: Before calling any write tools (add_order, shift_machine_orders, update_order_dates, update_order_status, update_order_quantity, delete_order), you MUST:
 1. Use get_orders to see the current state
@@ -239,6 +531,18 @@ IMPORTANT: Before calling any write tools (add_order, shift_machine_orders, upda
 For delete_order specifically: always name the order ID and SKU in your confirmation request, as deletion is permanent and cannot be undone.
 
 Dates are always in YYYY-MM-DD format.`;
+
+// Tools that mutate vf_orders. Used by /api/chat to set a dataChanged flag
+// in the response so the front-end refreshes its local state regardless of
+// what wording the model used in its reply text.
+const MUTATING_AI_TOOLS = new Set([
+  "shift_machine_orders",
+  "update_order_dates",
+  "update_order_status",
+  "add_order",
+  "update_order_quantity",
+  "delete_order",
+]);
 
 const AI_TOOLS = [
   {
@@ -340,6 +644,29 @@ const AI_TOOLS = [
       required: ["order_id"],
     },
   },
+  {
+    name: "find_bom",
+    description: "Search the BOM library for parent SKUs matching a query. Use this when the user names a product (e.g. 'CFC 506 EU' or 'PFS pouch') and you need to resolve it to a real SKU before calling bom_expand. Returns up to 20 matches. If the user gives an exact SKU, you can skip this and call bom_expand directly.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Substring to match against parent SKU or product name (case-insensitive)" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "bom_expand",
+    description: "CRITICAL for any multi-stage production planning. Recursively expand a parent SKU's BOM down to leaf-level raw-material requirements for a given quantity. Returns a list of every leaf RM and the kg required, plus the WIP intermediates traversed (with their own qtys, so you can plan upstream production stages). Honors the BOM's wastage% per edge. Use this BEFORE recommending production schedules for finished goods or WIPs — it tells you how much you actually need at each stage of the pipeline (e.g. 7,000 kg of finished chocolate does NOT require 7,000 kg of roasted seeds; the BOM ratios are typically far smaller). The 'machine' field on each intermediate identifies which production line that stage runs on, so you can sequence the schedule.",
+    input_schema: {
+      type: "object",
+      properties: {
+        sku: { type: "string", description: "Parent SKU to expand (FG-… or WIP-…)" },
+        qty: { type: "number", description: "Production quantity in kg (or units, for packaged FGs)" },
+      },
+      required: ["sku", "qty"],
+    },
+  },
 ];
 
 function addDays(dateStr, days) {
@@ -430,6 +757,7 @@ async function executeAITool(name, input) {
         qty, batches: 1, total: qty,
         status: "queued", priority, notes,
         cat: "liquor", sub: "liquor",
+        confirmed: false,
       };
       orders.push(newOrder);
       writeData("vf_orders", orders);
@@ -521,6 +849,69 @@ async function executeAITool(name, input) {
       return { ok: true, message: `Deleted order '${order_id}' (${deleted.sku || ""})` };
     }
 
+    case "find_bom": {
+      const q = String(input.query || "").trim().toLowerCase();
+      if (!q) return { ok: false, error: "query is required" };
+      const blob = readData("vf_boms");
+      if (!blob || !blob.parents) return { ok: false, error: "No BOMs imported yet" };
+      const matches = [];
+      for (const sku of Object.keys(blob.parents)) {
+        const versions = blob.parents[sku];
+        const def = versions[0] || {};
+        const hay = (sku + " " + (def.parentName || "")).toLowerCase();
+        if (hay.includes(q)) {
+          matches.push({
+            sku,
+            name: def.parentName || "",
+            machine: def.machine || null,
+            productionLeadTimeDays: def.productionLeadTime,
+            qtyToProduce: def.qtyToProduce,
+            componentCount: (def.components || []).length,
+            versionCount: versions.length,
+          });
+          if (matches.length >= 20) break;
+        }
+      }
+      return { ok: true, query: q, matchCount: matches.length, matches };
+    }
+
+    case "bom_expand": {
+      const { sku, qty } = input;
+      if (!sku || !isFinite(qty)) return { ok: false, error: "Need sku and numeric qty" };
+      const blob = readData("vf_boms");
+      if (!blob || !blob.parents) return { ok: false, error: "No BOMs imported yet" };
+      if (!blob.parents[sku]) return { ok: false, error: `No BOM defined for '${sku}'. Try find_bom to discover the right SKU.` };
+      let result;
+      try { result = expandBom(blob.parents, sku, qty, { applyWastage: true }); }
+      catch (e) { return { ok: false, error: e.message }; }
+      // Enrich the intermediates with each WIP's machine + production lead
+      // time so the AI can sequence the upstream stages correctly.
+      const enriched = result.intermediates.map(step => {
+        const versions = blob.parents[step.sku] || [];
+        const bom = versions[0] || {};
+        return {
+          sku: step.sku,
+          qtyKg: Math.round(step.qty * 100) / 100,
+          version: step.version,
+          depth: step.depth,
+          machine: bom.machine || null,
+          productionLeadTimeDays: bom.productionLeadTime,
+          parentName: bom.parentName || "",
+        };
+      });
+      const leaves = Object.values(result.leaves)
+        .map(l => ({ sku: l.sku, qtyKg: Math.round(l.qty * 100) / 100, isCycle: !!l.isCycle }))
+        .sort((a, b) => b.qtyKg - a.qtyKg);
+      return {
+        ok: true,
+        parent: sku,
+        qty,
+        leafRequirements: leaves,
+        intermediateStages: enriched,
+        note: "leafRequirements = leaf-level raw materials to procure. intermediateStages = each WIP that must be produced (with its machine and lead time) — use these for backward production scheduling.",
+      };
+    }
+
     default:
       return { ok: false, error: `Unknown tool: ${name}` };
   }
@@ -542,6 +933,7 @@ app.post("/api/chat", async (req, res) => {
       content: m.content,
     }));
     let response;
+    const mutatedTools = []; // names of mutating tools invoked this turn
 
     // Agentic loop — max 8 tool-use rounds
     for (let i = 0; i < 8; i++) {
@@ -560,11 +952,18 @@ app.post("/api/chat", async (req, res) => {
       currentMessages.push({ role: "assistant", content: response.content });
 
       const toolResults = await Promise.all(
-        toolUseBlocks.map(async block => ({
-          type: "tool_result",
-          tool_use_id: block.id,
-          content: JSON.stringify(await executeAITool(block.name, block.input)),
-        }))
+        toolUseBlocks.map(async block => {
+          // Track mutating tool invocations so the front-end knows to refresh
+          // its local data — replaces the fragile reply-text regex matching.
+          if (MUTATING_AI_TOOLS.has(block.name)) {
+            mutatedTools.push(block.name);
+          }
+          return {
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: JSON.stringify(await executeAITool(block.name, block.input)),
+          };
+        })
       );
       currentMessages.push({ role: "user", content: toolResults });
     }
@@ -579,7 +978,13 @@ app.post("/api/chat", async (req, res) => {
     // Append final assistant message to the conversation
     currentMessages.push({ role: "assistant", content: response.content });
 
-    res.json({ ok: true, reply, messages: currentMessages });
+    res.json({
+      ok: true,
+      reply,
+      messages: currentMessages,
+      dataChanged: mutatedTools.length > 0,
+      mutatedTools,
+    });
   } catch (e) {
     console.error("AI chat error:", e);
     res.status(500).json({ ok: false, error: e.message });
@@ -816,15 +1221,17 @@ async function performCin7Sync(days) {
   return status;
 }
 
-// POST /api/sync-cin7 — manual on-demand sync
+// POST /api/sync-cin7 — DISABLED. Cin7 deprecated /inventorymovements (2026)
+// without a v2 replacement that exposes production-receipt data, so the API
+// path can't reconstruct what we need. Inventory data is now loaded by
+// uploading the daily Cin7 "Inventory Movement Details" report (CSV/XLSX)
+// via the Traceability tab. Re-enable this if Cin7 ships a working endpoint.
 app.post("/api/sync-cin7", async (req, res) => {
-  try {
-    const status = await performCin7Sync(15);
-    res.json(status);
-  } catch (e) {
-    console.error("[Cin7] Sync error:", e.message);
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  res.status(503).json({
+    ok: false,
+    disabled: true,
+    error: "Cin7 API sync is disabled — Cin7 removed the /inventorymovements endpoint. Upload the daily Inventory Movement Details report on the Traceability tab instead.",
+  });
 });
 
 // GET /api/sync-cin7/status — last sync metadata
@@ -857,19 +1264,1125 @@ app.get("/api/sync-cin7/test", async (req, res) => {
   }
 });
 
-// Daily cron at 6:00 AM UTC — only starts if credentials are present
-if (process.env.CIN7_ACCOUNT_ID && process.env.CIN7_APPLICATION_KEY) {
-  cron.schedule("0 6 * * *", async () => {
-    console.log("[Cin7] Daily sync starting…");
+// Daily Cin7 movement-sync cron is DISABLED — see the /api/sync-cin7 comment.
+// Inventory MOVEMENTS still come from manual report uploads on the Traceability
+// tab. The on-hand snapshot below is a separate, working API path.
+console.log("[Cin7] Movement sync disabled — using manual report uploads instead.");
+
+// ── Cin7 on-hand inventory (Phase 1 of the MRP feature) ──────────────────────
+//
+// Cin7 Core's V1 endpoint /ExternalApi/ProductAvailability returns a snapshot
+// of stock per SKU × Location × Batch — the only Cin7 endpoint we've found
+// that gives us live on-hand quantities. It does NOT include movement
+// history or MO linkage; for that we still rely on the manual upload path.
+
+const C7_ONHAND_URL = "https://inventory.dearsystems.com/ExternalApi/ProductAvailability";
+
+async function fetchCin7OnHand() {
+  if (!process.env.CIN7_ACCOUNT_ID || !process.env.CIN7_APPLICATION_KEY) {
+    throw new Error("CIN7_ACCOUNT_ID or CIN7_APPLICATION_KEY environment variable not set");
+  }
+  const all = [];
+  let page = 1;
+  const limit = 1000;
+  while (true) {
+    const url = `${C7_ONHAND_URL}?Page=${page}&Limit=${limit}`;
+    const resp = await fetch(url, { headers: cin7Headers(), redirect: "follow" });
+    const ct = resp.headers.get("content-type") || "";
+    const text = await resp.text().catch(() => "");
+    if (!resp.ok) {
+      throw new Error(`Cin7 ProductAvailability ${resp.status} ${resp.statusText} [${ct}]: ${text.slice(0, 300)}`);
+    }
+    let data;
+    try { data = JSON.parse(text); }
+    catch (_) { throw new Error(`Cin7 ProductAvailability ${resp.status} returned non-JSON [${ct}]: ${text.slice(0, 300)}`); }
+    const batch = data.ProductAvailability || [];
+    all.push(...batch);
+    if (batch.length < limit) break;
+    page++;
+    if (page > 50) throw new Error("Cin7 ProductAvailability pagination exceeded 50 pages — aborting");
+  }
+  return all;
+}
+
+async function performCin7OnHandSync() {
+  const rows = await fetchCin7OnHand();
+  const now = new Date().toISOString();
+  // Per-SKU rollup: sum across batches/locations for the MRP engine
+  const bySku = {};
+  for (const r of rows) {
+    const sku = r.SKU;
+    if (!sku) continue;
+    if (!bySku[sku]) {
+      bySku[sku] = {
+        sku,
+        name: r.Name || "",
+        onHand: 0,
+        allocated: 0,
+        available: 0,
+        onOrder: 0,
+        inTransit: 0,
+        stockOnHand: 0,
+        locations: new Set(),
+        batches: 0,
+        nextDelivery: null,
+      };
+    }
+    const a = bySku[sku];
+    a.onHand += Number(r.OnHand) || 0;
+    a.allocated += Number(r.Allocated) || 0;
+    a.available += Number(r.Available) || 0;
+    a.onOrder += Number(r.OnOrder) || 0;
+    a.inTransit += Number(r.InTransit) || 0;
+    a.stockOnHand += Number(r.StockOnHand) || 0;
+    a.batches += 1;
+    if (r.Location) a.locations.add(r.Location);
+    if (r.NextDeliveryDate && (!a.nextDelivery || r.NextDeliveryDate < a.nextDelivery)) {
+      a.nextDelivery = r.NextDeliveryDate;
+    }
+  }
+  // Convert location Sets to sorted arrays for serialization
+  const skuRollup = Object.values(bySku).map(a => ({ ...a, locations: [...a.locations].sort() }));
+  const blob = {
+    lastSync: now,
+    rowCount: rows.length,
+    skuCount: skuRollup.length,
+    rows,           // raw per SKU/location/batch records
+    bySku: skuRollup, // rolled up per-SKU totals (what MRP uses)
+  };
+  writeData("inventory_onhand", blob);
+  return { ok: true, lastSync: now, rowCount: rows.length, skuCount: skuRollup.length };
+}
+
+// Admin-only middleware
+function requireAdmin(req, res, next) {
+  const users = readData("vf_users") || [];
+  const u = users.find(x => x && x.id === req.userId);
+  if (!u || u.role !== "admin") {
+    return res.status(403).json({ ok: false, error: "Admin role required" });
+  }
+  next();
+}
+
+// POST /api/cin7/onhand/sync — admin-triggered live pull
+app.post("/api/cin7/onhand/sync", requireAdmin, async (req, res) => {
+  try {
+    const status = await performCin7OnHandSync();
+    res.json(status);
+  } catch (e) {
+    console.error("[Cin7 OnHand] Sync error:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/cin7/onhand — return the cached on-hand snapshot (any authed user)
+app.get("/api/cin7/onhand", (req, res) => {
+  const blob = readData("inventory_onhand");
+  if (!blob) return res.json({ ok: true, lastSync: null, bySku: [], rows: [] });
+  res.json({ ok: true, ...blob });
+});
+
+// GET /api/cin7/onhand/status — last sync metadata only (cheap)
+app.get("/api/cin7/onhand/status", (req, res) => {
+  const blob = readData("inventory_onhand");
+  if (!blob) return res.json({ ok: true, lastSync: null });
+  res.json({ ok: true, lastSync: blob.lastSync, rowCount: blob.rowCount, skuCount: blob.skuCount });
+});
+
+// ── Cin7 Inventory Movement Details ingest (Apps Script → app webhook) ───────
+//
+// The user's Cin7 daily report drops an XLSX file into a Google Drive folder.
+// A small Apps Script bound to that folder reads the file each morning and
+// POSTs it to this endpoint with a shared secret. We parse it server-side
+// (same shape as the Traceability tab's manual CSV upload) and replace the
+// inventory data — driving auto-promote and the calendar ✓ marks without any
+// human action.
+//
+// Auth: header X-VF-Sync-Secret must match env INVENTORY_SYNC_SECRET.
+// Body: { filename, contentType, contentBase64, fileLastModified? }
+
+function parseInventoryXlsx(buffer) {
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  return parseInventoryRows(rows);
+}
+
+// Same aggregation logic as public/traceability_explorer.jsx#parseInventoryCSV
+// but takes a 2-D array of rows (from sheet_to_json) instead of CSV text.
+// Output shape MUST match so downstream consumers (Live Inventory KPIs, MO
+// Status auto-promote, calendar ✓ marks) work identically.
+function parseInventoryRows(rows) {
+  if (rows.length < 2) throw new Error("File has no data rows");
+
+  // Find the header row — first row containing both 'sku' and a 'quantity in' column
+  let hdrIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const fields = rows[i].map(f => String(f || "").toLowerCase().trim());
+    if (fields.includes("sku") && (fields.includes("quantity in") || fields.includes("inbound"))) {
+      hdrIdx = i; break;
+    }
+  }
+  if (hdrIdx === -1) throw new Error("Could not find header row with SKU + Quantity columns");
+
+  const hdr = rows[hdrIdx].map(h => String(h || "").toLowerCase().trim());
+  const colMap = {};
+  hdr.forEach((h, i) => {
+    if (h === "sku") colMap.sku = i;
+    else if (h === "product") colMap.product = i;
+    else if (h === "category") colMap.category = i;
+    else if (h === "unit") colMap.unit = i;
+    else if (h === "date") colMap.date = i;
+    else if (h === "month") colMap.month = i;
+    else if (h === "reference type" || h === "ref_type") colMap.refType = i;
+    else if (h === "quantity in" || h === "inbound") colMap.qtyIn = i;
+    else if (h === "quantity out" || h === "outbound") colMap.qtyOut = i;
+    else if (h === "batch #" || h === "batch_count") colMap.batch = i;
+    else if (h === "reference") colMap.reference = i;
+  });
+  if (colMap.sku === undefined) throw new Error("Missing required column: SKU");
+  if (colMap.qtyIn === undefined) throw new Error("Missing required column: Quantity in");
+  if (colMap.date === undefined && colMap.month === undefined) throw new Error("Missing required column: Date or Month");
+
+  const skuMap = new Map();
+  const batchSets = new Map();
+  const catAgg = {};
+  const rtAgg = {};
+  const moMap = new Map();
+  const monthSet = new Set();
+  const parseNum = s => { if (s == null || s === "") return 0; return parseFloat(String(s).replace(/,/g, "")) || 0; };
+  const dateToMonth = d => {
+    if (!d) return null;
+    const s = (d instanceof Date) ? d.toISOString().slice(0, 10) : String(d);
+    const mMap = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
+    let m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+    if (m) { const mo = mMap[m[2].toLowerCase()]; return mo ? m[3]+"-"+mo : null; }
+    m = s.match(/^(\d{4})-(\d{2})/);
+    if (m) return m[1]+"-"+m[2];
+    return null;
+  };
+
+  let rowCount = 0;
+  for (let i = hdrIdx + 1; i < rows.length; i++) {
+    const f = rows[i];
+    if (!f || f.length < 3) continue;
+    const sku = String(f[colMap.sku] || "").trim();
+    if (!sku) continue;
+    const month = colMap.month !== undefined ? String(f[colMap.month] || "") : dateToMonth(f[colMap.date]);
+    if (!month) continue;
+    const prod = colMap.product !== undefined ? String(f[colMap.product] || "") : "";
+    const cat = colMap.category !== undefined ? String(f[colMap.category] || "") : "";
+    const unit = colMap.unit !== undefined ? String(f[colMap.unit] || "") : "";
+    const rt = colMap.refType !== undefined ? String(f[colMap.refType] || "") : "";
+    const inb = parseNum(f[colMap.qtyIn]);
+    const outb = colMap.qtyOut !== undefined ? parseNum(f[colMap.qtyOut]) : 0;
+    const batch = colMap.batch !== undefined ? String(f[colMap.batch] || "") : "";
+    monthSet.add(month);
+    rowCount++;
+
+    if (!skuMap.has(sku)) skuMap.set(sku, { s: sku, p: prod, c: cat, u: unit, m: {}, rt: {}, ti: 0, to: 0, net: 0, bc: 0 });
+    if (!batchSets.has(sku)) batchSets.set(sku, new Set());
+    const entry = skuMap.get(sku);
+    if (!entry.m[month]) entry.m[month] = { i: 0, o: 0 };
+    entry.m[month].i += inb; entry.m[month].o += outb;
+    entry.ti += inb; entry.to += outb; entry.net += (inb - outb);
+    if (batch) batchSets.get(sku).add(batch);
+    if (rt) {
+      if (!entry.rt[rt]) entry.rt[rt] = { i: 0, o: 0 };
+      entry.rt[rt].i += inb; entry.rt[rt].o += outb;
+    }
+    if (!catAgg[cat]) catAgg[cat] = {};
+    if (!catAgg[cat][month]) catAgg[cat][month] = { i: 0, o: 0 };
+    catAgg[cat][month].i += inb; catAgg[cat][month].o += outb;
+    if (!rtAgg[rt]) rtAgg[rt] = {};
+    if (!rtAgg[rt][month]) rtAgg[rt][month] = { i: 0, o: 0 };
+    rtAgg[rt][month].i += inb; rtAgg[rt][month].o += outb;
+
+    const ref = colMap.reference !== undefined ? String(f[colMap.reference] || "") : "";
+    const moMatch = ref.match(/MO-\d+/);
+    if (moMatch) {
+      const moId = moMatch[0];
+      if (!moMap.has(moId)) moMap.set(moId, { mo: moId, sku, prod, totalIn: 0, totalOut: 0 });
+      const me = moMap.get(moId);
+      me.totalIn += inb;
+      me.totalOut += outb;
+    }
+  }
+  for (const [sku, entry] of skuMap) entry.bc = batchSets.get(sku).size;
+  const months = [...monthSet].sort();
+  const invSku = [...skuMap.values()];
+  if (!invSku.length) throw new Error("No valid data rows found");
+  return {
+    invSku,
+    invCat: catAgg,
+    invRt: rtAgg,
+    months,
+    rowCount,
+    moMovements: Object.fromEntries(moMap),
+  };
+}
+
+// Max-merge for the daily auto-sync against a rolling 15-day Cin7 window.
+//
+// Why MAX and not REPLACE: each daily file is a partial slice (only
+// transactions whose stock-movement-date falls in the last 15 days). For an
+// MO that ran 12 days starting outside that window, the file would report a
+// partial total. Per-month-REPLACE would clobber the full bulk-backfilled
+// month with the partial 15-day slice — eroding history one day at a time.
+//
+// Strategy: for each (SKU, month) bucket, take MAX of i and o independently
+// across existing vs delta. Same for invCat[cat][month], invRt[rt][month],
+// and moMovements per MO. The "fullest" snapshot ever seen wins.
+//
+// Assumes monotonic-growth semantics: production-receipt qtys only go up over
+// time. Voiding a posted transaction would reduce the true total — MAX would
+// incorrectly preserve the pre-void value. Rare enough that re-running a bulk
+// backfill is an acceptable fix when needed.
+function mergeInventoryByMonth(existing, delta) {
+  // Helper: pick larger { i, o } pair, treating missing as zero
+  const maxIO = (a, b) => ({
+    i: Math.max((a && a.i) || 0, (b && b.i) || 0),
+    o: Math.max((a && a.o) || 0, (b && b.o) || 0),
+  });
+  // Helper: per-key per-month max-merge for catAgg / rtAgg
+  const mergeMonthlyMax = (oldAgg, newAgg) => {
+    const out = {};
+    const keys = new Set([...Object.keys(oldAgg || {}), ...Object.keys(newAgg || {})]);
+    for (const k of keys) {
+      out[k] = {};
+      const months = new Set([...Object.keys((oldAgg || {})[k] || {}), ...Object.keys((newAgg || {})[k] || {})]);
+      for (const m of months) {
+        out[k][m] = maxIO((oldAgg || {})[k] && oldAgg[k][m], (newAgg || {})[k] && newAgg[k][m]);
+      }
+    }
+    return out;
+  };
+
+  // Index existing + delta SKUs by SKU id
+  const existingBySku = new Map((existing.invSku || []).map(e => [e.s, e]));
+  const deltaBySku    = new Map((delta.invSku || []).map(e => [e.s, e]));
+  const allSkus = new Set([...existingBySku.keys(), ...deltaBySku.keys()]);
+
+  const merged = [];
+  for (const sku of allSkus) {
+    const ex = existingBySku.get(sku);
+    const dx = deltaBySku.get(sku);
+    // Union of months from both sides
+    const months = new Set([
+      ...Object.keys((ex && ex.m) || {}),
+      ...Object.keys((dx && dx.m) || {}),
+    ]);
+    const m = {};
+    let ti = 0, to = 0, net = 0;
+    for (const month of months) {
+      const v = maxIO((ex && ex.m && ex.m[month]) || null, (dx && dx.m && dx.m[month]) || null);
+      m[month] = v;
+      ti += v.i; to += v.o; net += v.i - v.o;
+    }
+    // Per-SKU rt totals: union of ref types, max per type
+    const rt = {};
+    const rtKeys = new Set([
+      ...Object.keys((ex && ex.rt) || {}),
+      ...Object.keys((dx && dx.rt) || {}),
+    ]);
+    for (const r of rtKeys) {
+      rt[r] = maxIO((ex && ex.rt && ex.rt[r]) || null, (dx && dx.rt && dx.rt[r]) || null);
+    }
+    // Batch count: take the larger
+    const bc = Math.max((ex && ex.bc) || 0, (dx && dx.bc) || 0);
+    merged.push({
+      s: sku,
+      p: (dx && dx.p) || (ex && ex.p) || "",
+      c: (dx && dx.c) || (ex && ex.c) || "",
+      u: (dx && dx.u) || (ex && ex.u) || "",
+      m, rt, ti, to, net, bc,
+    });
+  }
+
+  // moMovements: per-MO max of totalIn and totalOut independently. Carry
+  // over the SKU/prod metadata from whichever side has it (delta wins on
+  // ties because it's likely fresher).
+  const mergedMo = {};
+  const moKeys = new Set([
+    ...Object.keys(existing.moMovements || {}),
+    ...Object.keys(delta.moMovements || {}),
+  ]);
+  for (const mo of moKeys) {
+    const ex = (existing.moMovements || {})[mo];
+    const dx = (delta.moMovements || {})[mo];
+    mergedMo[mo] = {
+      mo,
+      sku: (dx && dx.sku) || (ex && ex.sku) || "",
+      prod: (dx && dx.prod) || (ex && ex.prod) || "",
+      totalIn: Math.max((ex && ex.totalIn) || 0, (dx && dx.totalIn) || 0),
+      totalOut: Math.max((ex && ex.totalOut) || 0, (dx && dx.totalOut) || 0),
+    };
+  }
+
+  return {
+    invSku: merged,
+    invCat: mergeMonthlyMax(existing.invCat, delta.invCat),
+    invRt:  mergeMonthlyMax(existing.invRt,  delta.invRt),
+    months: [...new Set([...(existing.months || []), ...(delta.months || [])])].sort(),
+    moMovements: mergedMo,
+  };
+}
+
+app.post("/api/cin7/inventory-movements", async (req, res) => {
+  // Auth: shared secret. Returns 401 instead of standard requireAuth so this
+  // endpoint can be hit by Apps Script without a session cookie.
+  const expected = process.env.INVENTORY_SYNC_SECRET;
+  if (!expected) return res.status(503).json({ ok: false, error: "INVENTORY_SYNC_SECRET not configured on server" });
+  const provided = req.headers["x-vf-sync-secret"] || req.headers["X-VF-Sync-Secret"];
+  if (!provided || provided !== expected) return res.status(401).json({ ok: false, error: "Invalid sync secret" });
+
+  try {
+    const body = req.body || {};
+    const { filename, contentBase64, fileLastModified } = body;
+    if (!contentBase64) return res.status(400).json({ ok: false, error: "Missing contentBase64 in body" });
+    const buffer = Buffer.from(contentBase64, "base64");
+    let parsed;
     try {
-      const s = await performCin7Sync();
-      console.log(`[Cin7] Sync done — ${s.movementCount} movements, ${s.moCount} MOs`);
+      parsed = parseInventoryXlsx(buffer);
     } catch (e) {
-      console.error("[Cin7] Daily sync failed:", e.message);
+      return res.status(400).json({ ok: false, error: "Parse failed: " + e.message });
+    }
+
+    // Per-month-replace merge — preserves history outside the rolling window
+    const existing = readData("inventory") || {};
+    const merged = mergeInventoryByMonth(existing, parsed);
+
+    const finalData = {
+      ...merged,
+      lastSync: new Date().toISOString(),
+      lastSyncSource: "gdrive-auto-sync",
+      lastSyncFile: filename || null,
+      lastSyncFileModified: fileLastModified || null,
+    };
+    writeData("inventory", finalData);
+
+    console.log(`[gdrive-sync] Ingested ${filename || "(unnamed)"} — ${parsed.rowCount} rows · ${parsed.invSku.length} new-window SKUs · ${Object.keys(parsed.moMovements).length} new-window MOs · merged total: ${finalData.invSku.length} SKUs · ${Object.keys(finalData.moMovements).length} MOs`);
+    res.json({
+      ok: true,
+      filename: filename || null,
+      windowRowCount: parsed.rowCount,
+      windowSkuCount: parsed.invSku.length,
+      windowMoCount: Object.keys(parsed.moMovements).length,
+      mergedSkuCount: finalData.invSku.length,
+      mergedMoCount: Object.keys(finalData.moMovements).length,
+      windowMonths: parsed.months,
+      allMonths: finalData.months,
+      lastSync: finalData.lastSync,
+    });
+  } catch (e) {
+    console.error("[gdrive-sync] Ingest error:", e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ── MRP Phase 2: BOM + supply settings (lead times, safety stock) ────────────
+//
+// Storage shape:
+//   vf_boms              — { lastImport, parents: { <sku>: [{ version, ... }] } }
+//   vf_supply_settings   — { lastImport, defaults: {...}, perSku: { <sku>: {...} } }
+//
+// Default version (VersionDefault=Yes) is used for MRP requirements; other
+// versions are kept in the parents[sku] array so a UI can show them all.
+
+// Map BOM WorkCentreName → app machine key (or null for "priority 2 — map later")
+const WC_TO_MACHINE = {
+  "Refine":               "refining",
+  "Conch":                "conching",
+  "Drops and Pack":       "depositing",
+  "Pack in Pouch":        "pouching",
+  "Pack from MAC":        "mac_packout",
+  "Clean Seeds":          "seed_clean",
+  "Grape Seeds":          "roaster",
+  "Ground BFC":           "grinder",
+  "Liquor":               "__liquor_split__",  // resolved from fat-type RM
+  "Final Blend":          null,
+  "Hazelnut Free Spread": null,
+  "Concentrate":          null,
+  "Paste":                null,
+  "Testing work center":  null,
+};
+
+// Production lead time per machine, in days (sourced from Capacity & Ops tab)
+const MACHINE_LEAD_DAYS = {
+  seed_clean:  1,
+  roaster:     1,
+  east_mac:    12,
+  west_mac:    12,
+  mac_1250:    1,
+  mac_packout: 10,
+  pouching:    1,
+  fat_melter:  3,
+  refining:    1,
+  conching:    1,
+  depositing:  1,
+  grinder:     1,   // 1000 kg / 2-hr shift; defaults to 1 day for typical runs
+};
+
+// CSV line parser that handles quoted fields and commas-inside-quotes
+function parseCsvLine(line) {
+  const out = []; let cur = ""; let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"' && line[i+1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') inQ = false;
+      else cur += ch;
+    } else {
+      if (ch === '"') inQ = true;
+      else if (ch === ',') { out.push(cur); cur = ""; }
+      else cur += ch;
+    }
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+
+// Parse Cin7 BOM CSV (Action,ProductSKU,...). Returns the canonical vf_boms blob.
+function parseBomCsv(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) throw new Error("BOM CSV has no data rows");
+  const hdr = parseCsvLine(lines[0]);
+  const idx = {};
+  hdr.forEach((h, i) => idx[h] = i);
+  const required = ["ProductSKU", "ItemType", "ComponentSKU_ResourceCode", "Quantity", "Version"];
+  for (const r of required) if (idx[r] === undefined) throw new Error(`BOM CSV missing column: ${r}`);
+
+  // First pass: bucket rows by parent + version
+  const bucket = {}; // key = parent + '|' + version
+  for (let i = 1; i < lines.length; i++) {
+    const f = parseCsvLine(lines[i]);
+    const parent = f[idx.ProductSKU];
+    if (!parent) continue;
+    const itemType = f[idx.ItemType];
+    if (itemType === "Output" || itemType === "Resource") continue;
+    if (itemType !== "Component") continue;
+    const componentSku = f[idx.ComponentSKU_ResourceCode];
+    if (!componentSku) continue;
+    const version = String(f[idx.Version] || "1");
+    const key = parent + "|" + version;
+    if (!bucket[key]) {
+      bucket[key] = {
+        parent,
+        parentName: f[idx.ProductName] || "",
+        version,
+        versionName: f[idx.VersionName] || "",
+        isDefault: (f[idx.VersionDefault] || "").toLowerCase() === "yes",
+        // QuantityToProduce — the batch size the BOM is defined for. Component
+        // qtys must be divided by this to get the per-unit-of-parent ratio.
+        // Defaults to 1 if missing/blank/zero (treats blanks as a no-op).
+        qtyToProduce: parseFloat(f[idx.QuantityToProduce]) || 1,
+        runSize: parseFloat(f[idx.RunSize]) || 0,
+        minQty: parseFloat(f[idx.MinQuantity]) || 0,
+        maxQty: parseFloat(f[idx.MaxQuantity]) || 0,
+        productionLeadTimeRaw: parseInt(f[idx.ProductionLeadTime], 10) || 0,
+        components: [],
+      };
+    }
+    bucket[key].components.push({
+      sku: componentSku,
+      name: f[idx.ComponentName_ResourceName] || "",
+      qty: parseFloat(f[idx.Quantity]) || 0,
+      wastagePct: parseFloat(f[idx.WastagePercent_ForStockComponentOnly]) || 0,
+      op: parseInt(f[idx.OperationSequence], 10) || 1,
+      opName: f[idx.OperationName] || "",
+      workCentre: f[idx.WorkCentreName] || "",
+    });
+  }
+
+  // Second pass: derive machine + production lead time per BOM
+  const parents = {};
+  for (const key of Object.keys(bucket)) {
+    const b = bucket[key];
+    b.machine = deriveMachineFromBom(b);
+    b.productionLeadTime = b.machine ? (MACHINE_LEAD_DAYS[b.machine] || null) : null;
+    if (!parents[b.parent]) parents[b.parent] = [];
+    parents[b.parent].push(b);
+  }
+  // Sort each parent's versions: default first, then by version number
+  for (const sku of Object.keys(parents)) {
+    parents[sku].sort((a, b) => {
+      if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+      return Number(a.version) - Number(b.version);
+    });
+  }
+  return {
+    lastImport: new Date().toISOString(),
+    parents,
+    parentCount: Object.keys(parents).length,
+    rowCount: Object.values(parents).reduce((s, vs) => s + vs.reduce((s2, v) => s2 + v.components.length, 0), 0),
+  };
+}
+
+// Resolve the machine key for a BOM. Most work centres map directly; Liquor
+// splits to east_mac / west_mac based on whether the components include a CBE
+// (RM-120002-00 Coberine) or CBS (RM-120004-00 PK-100) fat.
+function deriveMachineFromBom(bom) {
+  if (!bom.components.length) return null;
+  // Use the first operation's work centre as the primary
+  const wc = bom.components[0].workCentre;
+  const m = WC_TO_MACHINE[wc];
+  if (m === undefined) return null; // unknown WC
+  if (m === null) return null;       // priority-2, deliberately unmapped
+  if (m !== "__liquor_split__") return m;
+  // Liquor split — scan all components for a fat SKU
+  const skus = new Set(bom.components.map(c => c.sku));
+  if (skus.has("RM-120002-00")) return "west_mac"; // Coberine = CBE
+  if (skus.has("RM-120004-00")) return "east_mac"; // PK-100 = CBS
+  return null;
+}
+
+// Parse the lead-time CSV (SKU, Product Name, "WOS & Lead").
+// Per-user: when the cell reads "Xwks & Y Days", use ONLY the days portion.
+// "contract" → flag as contract-managed (no PO suggestions).
+// "more to -00" / similar → alias resolved later in normalizeSupplySettings.
+function parseLeadTimeCsv(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (!lines.length) return [];
+  const hdr = parseCsvLine(lines[0]).map(h => h.toLowerCase());
+  const skuIdx = hdr.findIndex(h => h === "sku");
+  const ltIdx  = hdr.findIndex(h => h.includes("lead") || h === "wos & lead");
+  if (skuIdx === -1 || ltIdx === -1) throw new Error("Lead-time CSV needs 'SKU' and 'WOS & Lead' (or 'Lead') columns");
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const f = parseCsvLine(lines[i]);
+    const sku = f[skuIdx]; if (!sku) continue;
+    const raw = (f[ltIdx] || "").trim();
+    const parsed = parseLeadTimeCell(raw);
+    out.push({ sku, raw, ...parsed });
+  }
+  return out;
+}
+
+// "X Days" / "Xwks & Y Days" / "contract" / "more to -00" / "" → structured
+function parseLeadTimeCell(raw) {
+  if (!raw) return { leadTimeDays: null, isContract: false, alias: null };
+  const lower = raw.toLowerCase();
+  if (lower.includes("contract")) return { leadTimeDays: null, isContract: true, alias: null };
+  // "more to -00" or "more to RM-XXXX" → alias
+  const aliasMatch = raw.match(/more to\s+(\S+)/i);
+  if (aliasMatch) return { leadTimeDays: null, isContract: false, alias: aliasMatch[1] };
+  // "Xwks & Y Days" — per user, take ONLY the days portion
+  const both = raw.match(/(\d+)\s*wk[s]?\s*&\s*(\d+)\s*day/i);
+  if (both) return { leadTimeDays: parseInt(both[2], 10), isContract: false, alias: null };
+  // "X Days"
+  const days = raw.match(/(\d+)\s*day/i);
+  if (days) return { leadTimeDays: parseInt(days[1], 10), isContract: false, alias: null };
+  return { leadTimeDays: null, isContract: false, alias: null };
+}
+
+// Normalize raw lead-time entries into the canonical perSku map. Resolves
+// aliases ("more to -00" → copy target's settings) and drops malformed rows.
+function normalizeSupplySettings(rawEntries, defaults) {
+  const perSku = {};
+  // First pass: direct entries
+  for (const e of rawEntries) {
+    if (!e.sku || e.alias) continue;
+    perSku[e.sku] = {
+      leadTimeDays: e.leadTimeDays,
+      isContract: e.isContract,
+      isAlias: false,
+      raw: e.raw,
+    };
+  }
+  // Second pass: alias entries point to direct entries
+  for (const e of rawEntries) {
+    if (!e.alias) continue;
+    // alias target like "-00" means "same as <prefix>-00" — resolve by prefix match
+    let targetSku = e.alias;
+    if (targetSku.startsWith("-")) {
+      // user shorthand — find a sibling with the same prefix
+      const prefix = e.sku.replace(/-\d+$/, "");
+      targetSku = prefix + targetSku;
+    }
+    const target = perSku[targetSku];
+    if (target) {
+      perSku[e.sku] = { ...target, isAlias: true, aliasOf: targetSku, raw: e.raw };
+    } else {
+      perSku[e.sku] = { leadTimeDays: null, isContract: false, isAlias: true, aliasOf: targetSku, aliasUnresolved: true, raw: e.raw };
+    }
+  }
+  return { lastImport: new Date().toISOString(), defaults, perSku };
+}
+
+// Recursively expand a BOM to leaf-RM requirements for a given parent + qty.
+// Returns { leaves: { sku: {qty, name, leafSku} }, intermediates: [{sku, qty, version, depth}] }
+// Cycles are detected via the visited set; a leaf is anything not in vf_boms.parents.
+function expandBom(parents, parentSku, qty, opts) {
+  opts = opts || {};
+  const applyWastage = opts.applyWastage !== false; // default true
+  const visited = new Set();
+  const leaves = {};
+  const trail = [];
+
+  function recurse(sku, needed, depth) {
+    if (depth > 12) throw new Error(`BOM recursion too deep at ${sku}`);
+    if (visited.has(sku)) {
+      // cycle — log and treat as leaf to bail out gracefully
+      if (!leaves[sku]) leaves[sku] = { sku, qty: 0, name: "(cycle detected)", isCycle: true };
+      leaves[sku].qty += needed;
+      return;
+    }
+    const versions = parents[sku];
+    if (!versions || !versions.length) {
+      // leaf RM
+      if (!leaves[sku]) leaves[sku] = { sku, qty: 0, name: "" };
+      leaves[sku].qty += needed;
+      return;
+    }
+    // Pick default version (first after sort)
+    const bom = versions[0];
+    visited.add(sku);
+    trail.push({ sku, qty: needed, version: bom.version, depth });
+    // Normalize each component qty to "per 1 unit of parent" by dividing by
+    // the BOM's QuantityToProduce. The Cin7 export defines BOMs at a batch
+    // size (e.g. 25 kg of FG-860 needs 25 kg of WIP-5100043, not 25 kg per
+    // 1 kg of FG). Without this division, requirements get inflated by the
+    // batch size.
+    const batchSize = bom.qtyToProduce || 1;
+    for (const c of bom.components) {
+      const perUnit = c.qty / batchSize;
+      const eff = applyWastage ? perUnit * (1 + (c.wastagePct || 0) / 100) : perUnit;
+      recurse(c.sku, needed * eff, depth + 1);
+    }
+    visited.delete(sku);
+  }
+
+  recurse(parentSku, qty, 0);
+  return { leaves, intermediates: trail };
+}
+
+// POST /api/boms/import — admin-only, accepts raw CSV text in body { csv: "..." }
+app.post("/api/boms/import", requireAdmin, (req, res) => {
+  try {
+    const csv = req.body && req.body.csv;
+    if (!csv) return res.status(400).json({ ok: false, error: "Missing 'csv' field in body" });
+    const blob = parseBomCsv(csv);
+    writeData("vf_boms", blob);
+    res.json({ ok: true, ...blob, parents: undefined });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/supply-settings/import — admin-only. Body: { leadTimeCsv?, packagingCsv?, defaults? }
+app.post("/api/supply-settings/import", requireAdmin, (req, res) => {
+  try {
+    const body = req.body || {};
+    const defaults = Object.assign(
+      { leadTimeDays: 30, safetyStockDays: 14, packagingDefaultDays: 14 },
+      body.defaults || {},
+    );
+    const all = [];
+    if (body.leadTimeCsv) all.push(...parseLeadTimeCsv(body.leadTimeCsv));
+    if (body.packagingCsv) all.push(...parseLeadTimeCsv(body.packagingCsv));
+    // Apply per-prefix defaults: PK-* without explicit value → packagingDefaultDays
+    for (const e of all) {
+      if (e.leadTimeDays == null && !e.isContract && !e.alias && e.sku && e.sku.startsWith("PK-")) {
+        e.leadTimeDays = defaults.packagingDefaultDays;
+        e.appliedPackagingDefault = true;
+      }
+    }
+    const blob = normalizeSupplySettings(all, defaults);
+    writeData("vf_supply_settings", blob);
+    res.json({ ok: true, lastImport: blob.lastImport, defaults: blob.defaults, skuCount: Object.keys(blob.perSku).length });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/boms — full BOM blob (any authed user)
+app.get("/api/boms", (req, res) => {
+  const blob = readData("vf_boms");
+  if (!blob) return res.json({ ok: true, lastImport: null, parents: {}, parentCount: 0 });
+  res.json({ ok: true, ...blob });
+});
+
+// GET /api/boms/expand?sku=X&qty=Y[&wastage=0] — recursive expansion for testing/MRP
+app.get("/api/boms/expand", (req, res) => {
+  try {
+    const sku = req.query.sku;
+    const qty = parseFloat(req.query.qty);
+    if (!sku || !isFinite(qty)) return res.status(400).json({ ok: false, error: "Need sku and numeric qty" });
+    const blob = readData("vf_boms");
+    if (!blob) return res.status(404).json({ ok: false, error: "No BOMs imported" });
+    const result = expandBom(blob.parents, sku, qty, { applyWastage: req.query.wastage !== "0" });
+    res.json({ ok: true, sku, qty, ...result });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/supply-settings — current settings
+app.get("/api/supply-settings", (req, res) => {
+  const blob = readData("vf_supply_settings");
+  if (!blob) return res.json({ ok: true, lastImport: null, defaults: { leadTimeDays: 30, safetyStockDays: 14, packagingDefaultDays: 14 }, perSku: {} });
+  res.json({ ok: true, ...blob });
+});
+
+// PUT /api/supply-settings — admin-only full-blob replace. The UI edits one
+// SKU at a time but each save sends the entire perSku map + defaults so the
+// server doesn't need diff logic. Body: { defaults: {...}, perSku: {...} }.
+// Validates shapes and rejects malformed input rather than letting bad data
+// poison the MRP calc downstream.
+app.put("/api/supply-settings", requireAdmin, (req, res) => {
+  try {
+    const body = req.body || {};
+    const defaults = Object.assign(
+      { leadTimeDays: 30, safetyStockDays: 14, packagingDefaultDays: 14 },
+      body.defaults || {},
+    );
+    // Coerce default values to non-negative integers
+    for (const k of ["leadTimeDays", "safetyStockDays", "packagingDefaultDays"]) {
+      const n = parseInt(defaults[k], 10);
+      if (!isFinite(n) || n < 0) return res.status(400).json({ ok: false, error: `defaults.${k} must be a non-negative integer` });
+      defaults[k] = n;
+    }
+    const inSku = body.perSku || {};
+    if (typeof inSku !== "object" || Array.isArray(inSku)) return res.status(400).json({ ok: false, error: "perSku must be an object" });
+    const cleanSku = {};
+    for (const sku of Object.keys(inSku)) {
+      if (!sku || typeof sku !== "string") continue;
+      const v = inSku[sku] || {};
+      const entry = {
+        leadTimeDays: v.leadTimeDays == null ? null : (parseInt(v.leadTimeDays, 10) || 0),
+        isContract: !!v.isContract,
+        isAlias: !!v.isAlias,
+      };
+      if (entry.isAlias && v.aliasOf) entry.aliasOf = String(v.aliasOf);
+      if (v.raw != null) entry.raw = String(v.raw);
+      // If isContract or isAlias, leadTimeDays may be null. If neither and
+      // the value is null, the SKU effectively falls back to the default.
+      cleanSku[sku] = entry;
+    }
+    const blob = {
+      lastImport: new Date().toISOString(),
+      defaults,
+      perSku: cleanSku,
+    };
+    writeData("vf_supply_settings", blob);
+    res.json({ ok: true, lastImport: blob.lastImport, skuCount: Object.keys(cleanSku).length });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Nightly on-hand sync at 06:30 UTC (just after the manual movement-upload window)
+if (process.env.CIN7_ACCOUNT_ID && process.env.CIN7_APPLICATION_KEY) {
+  cron.schedule("30 6 * * *", async () => {
+    console.log("[Cin7 OnHand] Nightly sync starting…");
+    try {
+      const s = await performCin7OnHandSync();
+      console.log(`[Cin7 OnHand] Sync done — ${s.rowCount} rows, ${s.skuCount} SKUs`);
+    } catch (e) {
+      console.error("[Cin7 OnHand] Nightly sync failed:", e.message);
     }
   });
-  console.log("[Cin7] Daily sync scheduled at 06:00 UTC");
+  console.log("[Cin7 OnHand] Nightly sync scheduled at 06:30 UTC");
 }
+
+// ── MRP Phase 3: requirements engine ─────────────────────────────────────────
+//
+// Forward-walk allocation MRP. For each production order in the horizon:
+//   1. Recursively expand the FG's BOM to leaf-RM requirements
+//   2. Date-stamp each requirement at the order's start date (when the
+//      material is needed on the production floor)
+//   3. Sort all requirements globally by date
+//   4. Walk forward, allocating from (on-hand + on-order + in-transit) per SKU
+//   5. When we hit a shortfall, that's an at-risk MO + a suggested PO
+//      (qty = the shortfall, must-order-by = need-date − leadTimeDays)
+//
+// Toggles:
+//   - includeUnconfirmed: when false, orders with confirmed===false are
+//     skipped entirely (conservative — only buys for committed plan)
+//   - applyWastage: when true, expandBom multiplies each component qty by
+//     (1 + wastagePct/100)
+//   - horizonDays: how far forward to look (default 120 ≈ 4 months)
+
+function getMrpInputs() {
+  const orders = readData("vf_orders") || [];
+  const bomBlob = readData("vf_boms") || { parents: {} };
+  const supplyBlob = readData("vf_supply_settings") || { defaults: {}, perSku: {} };
+  const onHandBlob = readData("inventory_onhand") || { bySku: [] };
+  const onHandBySku = {};
+  for (const row of onHandBlob.bySku || []) onHandBySku[row.sku] = row;
+  return { orders, bomParents: bomBlob.parents || {}, supply: supplyBlob, onHandBySku };
+}
+
+// Resolve effective lead time for a SKU. Aliases follow once. Contract SKUs
+// are flagged so the PO logic can exclude them.
+function resolveLeadTime(sku, supply) {
+  const defaults = supply.defaults || {};
+  const perSku = supply.perSku || {};
+  const seen = new Set();
+  let cur = sku;
+  while (cur && perSku[cur] && perSku[cur].isAlias && !seen.has(cur)) {
+    seen.add(cur);
+    cur = perSku[cur].aliasOf;
+  }
+  const entry = perSku[cur];
+  if (entry && entry.isContract) {
+    return { leadTimeDays: null, isContract: true, source: "contract" };
+  }
+  if (entry && entry.leadTimeDays != null) {
+    return { leadTimeDays: entry.leadTimeDays, isContract: false, source: cur === sku ? "explicit" : `alias:${cur}` };
+  }
+  // Per-prefix default for packaging
+  if (sku && sku.startsWith("PK-") && defaults.packagingDefaultDays != null) {
+    return { leadTimeDays: defaults.packagingDefaultDays, isContract: false, source: "packaging-default" };
+  }
+  return { leadTimeDays: defaults.leadTimeDays != null ? defaults.leadTimeDays : 30, isContract: false, source: "default" };
+}
+
+function mrpAddDays(dateStr, days) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Order.sku field formats vary across the import history — sometimes it's a
+// bare SKU ("FG-888-810-00-US"), sometimes "SKU · Description"
+// ("WIP-5100810-US · 810 CBE_US..."), sometimes "Description  SKU"
+// ("505.EU CBE Liquor  WIP-5100042-EU"). To find the right BOM, try a direct
+// match first, then look for any BOM parent SKU as a word-boundary substring.
+function extractBomSku(orderSku, bomParents) {
+  if (!orderSku) return null;
+  if (bomParents[orderSku]) return orderSku;
+  // Try cleaned forms first (split on common separators, strip whitespace)
+  const candidates = orderSku.split(/[·,]/).map(s => s.trim());
+  for (const c of candidates) {
+    if (bomParents[c]) return c;
+  }
+  // Substring search across all BOM parents — match longest first so
+  // "WIP-5100810" prefers the more specific over a "WIP-5100" substring
+  const allSkus = Object.keys(bomParents).sort((a, b) => b.length - a.length);
+  for (const sku of allSkus) {
+    // Word-boundary regex with escaped special chars
+    const re = new RegExp("(^|[^A-Za-z0-9-])" + sku.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^A-Za-z0-9-]|$)");
+    if (re.test(orderSku)) return sku;
+  }
+  return null;
+}
+
+// Build a flat list of dated leaf-RM requirements from the production plan.
+// Each entry: { sku, qtyKg, neededByDate, sourceOrderId, sourceFgSku, sourceQty }
+function buildRequirements(orders, bomParents, opts) {
+  const horizonEnd = mrpAddDays(opts.today, opts.horizonDays);
+  const requirements = [];
+  const skipped = { unconfirmed: 0, complete: 0, noStart: 0, outsideHorizon: 0, noBom: 0 };
+  const noBomExamples = [];
+
+  for (const o of orders) {
+    if (!opts.includeUnconfirmed && o.confirmed === false) { skipped.unconfirmed++; continue; }
+    if (o.status === "complete") { skipped.complete++; continue; }
+    if (!o.start) { skipped.noStart++; continue; }
+    if (o.start > horizonEnd) { skipped.outsideHorizon++; continue; }
+
+    const plannedQty = o.total || (o.qty || 0) * (o.batches || 1);
+    if (!o.sku || plannedQty <= 0) { skipped.noBom++; continue; }
+
+    const fgSku = extractBomSku(o.sku, bomParents);
+    if (!fgSku) {
+      skipped.noBom++;
+      if (noBomExamples.length < 5) noBomExamples.push({ orderId: o.orderId, sku: o.sku });
+      continue;
+    }
+
+    let expansion;
+    try { expansion = expandBom(bomParents, fgSku, plannedQty, { applyWastage: opts.applyWastage }); }
+    catch (e) { skipped.noBom++; continue; }
+
+    const neededBy = o.start < opts.today ? opts.today : o.start;
+    for (const leaf of Object.values(expansion.leaves || {})) {
+      if (leaf.qty <= 0) continue;
+      // Filter out non-procurable BOM leaves (labor, scrap, output products,
+      // anything that isn't a real raw material or packaging SKU). MRP only
+      // suggests POs for things that get bought.
+      if (!isProcurable(leaf.sku)) continue;
+      requirements.push({
+        sku: leaf.sku,
+        qtyKg: leaf.qty,
+        neededByDate: neededBy,
+        sourceOrderId: o.orderId || o.id,
+        sourceFgSku: fgSku,
+        sourceFgQty: plannedQty,
+      });
+    }
+  }
+  return { requirements, skipped, noBomExamples };
+}
+
+// A BOM leaf is "procurable" if it looks like a real RM, packaging, or
+// supplier-purchased component (FG-FL-* flavors). Excludes labor lines,
+// SCRAP outputs, and anything else that doesn't get bought.
+function isProcurable(sku) {
+  if (!sku) return false;
+  const s = String(sku).toUpperCase();
+  // Known non-procurable patterns
+  if (s.startsWith("LABOR")) return false;
+  if (s === "SCRAP") return false;
+  if (s.startsWith("WIDGET")) return false;   // test data
+  if (s.startsWith("TEST")) return false;     // test data
+  if (s.startsWith("L ") || s === "L") return false; // bare labor codes
+  // Procurable prefixes (matches what the supply settings cover)
+  return /^(RM-|PK-|FG-FL|FLV-|VC-|ING-)/.test(s);
+}
+
+// Forward-walk allocation. For each SKU, walk requirements in date order,
+// drawing from running supply (on-hand + on-order). When supply hits zero,
+// every subsequent need becomes a shortfall → suggested PO.
+function allocateAndPlan(requirements, onHandBySku, supply, today) {
+  // Group requirements by SKU
+  const bySku = {};
+  for (const r of requirements) {
+    if (!bySku[r.sku]) bySku[r.sku] = [];
+    bySku[r.sku].push(r);
+  }
+
+  const skuResults = [];
+  const allAtRiskOrders = new Map(); // orderId → { orderId, shortages: [{sku, qtyShort, neededByDate}] }
+  const suggestedPOs = [];
+
+  for (const sku of Object.keys(bySku)) {
+    const reqs = bySku[sku].sort((a, b) => a.neededByDate.localeCompare(b.neededByDate));
+    const lead = resolveLeadTime(sku, supply);
+    const onHand = onHandBySku[sku] || { onHand: 0, allocated: 0, available: 0, onOrder: 0, inTransit: 0, name: "" };
+
+    // Starting supply pool: available (on-hand minus already-allocated to other things in Cin7)
+    // + onOrder + inTransit. We model this as a single pool for v1; per-receipt-date
+    // bucketing would be a Phase 4 refinement.
+    let supplyPool = (onHand.available || 0) + (onHand.onOrder || 0) + (onHand.inTransit || 0);
+    const startingSupply = supplyPool;
+
+    let totalDemand = 0;
+    let totalShort = 0;
+    let earliestShortDate = null;
+    const allocations = [];
+
+    for (const r of reqs) {
+      totalDemand += r.qtyKg;
+      const allocFromPool = Math.min(supplyPool, r.qtyKg);
+      const shortage = r.qtyKg - allocFromPool;
+      supplyPool -= allocFromPool;
+      allocations.push({
+        ...r,
+        allocatedFromSupply: allocFromPool,
+        shortage,
+        runningSupplyAfter: supplyPool,
+      });
+      if (shortage > 0) {
+        totalShort += shortage;
+        if (!earliestShortDate || r.neededByDate < earliestShortDate) earliestShortDate = r.neededByDate;
+        // Record at-risk for this MO
+        if (!allAtRiskOrders.has(r.sourceOrderId)) {
+          allAtRiskOrders.set(r.sourceOrderId, {
+            orderId: r.sourceOrderId,
+            sourceFgSku: r.sourceFgSku,
+            sourceFgQty: r.sourceFgQty,
+            shortages: [],
+          });
+        }
+        allAtRiskOrders.get(r.sourceOrderId).shortages.push({
+          sku: r.sku,
+          qtyShort: shortage,
+          neededByDate: r.neededByDate,
+        });
+      }
+    }
+
+    // Suggest a PO if there's a shortfall AND the SKU isn't contract-managed
+    if (totalShort > 0 && !lead.isContract) {
+      const mustOrderBy = lead.leadTimeDays != null ? mrpAddDays(earliestShortDate, -lead.leadTimeDays) : null;
+      const isOverdue = mustOrderBy != null && mustOrderBy < today;
+      suggestedPOs.push({
+        sku,
+        name: onHand.name || "",
+        qtyToOrder: Math.ceil(totalShort),
+        earliestNeedDate: earliestShortDate,
+        leadTimeDays: lead.leadTimeDays,
+        leadTimeSource: lead.source,
+        mustOrderByDate: mustOrderBy,
+        isOverdue,
+        projectedReceiptDate: lead.leadTimeDays != null ? mrpAddDays(today, lead.leadTimeDays) : null,
+      });
+    }
+
+    skuResults.push({
+      sku,
+      name: onHand.name || "",
+      isContract: lead.isContract,
+      leadTimeDays: lead.leadTimeDays,
+      leadTimeSource: lead.source,
+      startingSupply,
+      onHand: onHand.onHand || 0,
+      available: onHand.available || 0,
+      onOrder: onHand.onOrder || 0,
+      inTransit: onHand.inTransit || 0,
+      totalDemand,
+      totalShort,
+      allocations, // detailed timeline for drill-down
+    });
+  }
+
+  // Sort outputs for stable presentation
+  suggestedPOs.sort((a, b) => {
+    // Overdue first, then by must-order-by date
+    if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1;
+    return (a.mustOrderByDate || "").localeCompare(b.mustOrderByDate || "");
+  });
+
+  const atRiskOrders = [...allAtRiskOrders.values()].sort((a, b) => {
+    const aMin = a.shortages.reduce((m, s) => m && m < s.neededByDate ? m : s.neededByDate, null);
+    const bMin = b.shortages.reduce((m, s) => m && m < s.neededByDate ? m : s.neededByDate, null);
+    return (aMin || "").localeCompare(bMin || "");
+  });
+
+  return { skuResults, suggestedPOs, atRiskOrders };
+}
+
+// GET /api/mrp/run?includeUnconfirmed=0&horizonDays=120&applyWastage=1
+app.get("/api/mrp/run", (req, res) => {
+  try {
+    const includeUnconfirmed = req.query.includeUnconfirmed === "1" || req.query.includeUnconfirmed === "true";
+    const applyWastage = req.query.applyWastage !== "0" && req.query.applyWastage !== "false";
+    const horizonDays = Math.max(1, Math.min(365, parseInt(req.query.horizonDays, 10) || 120));
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { orders, bomParents, supply, onHandBySku } = getMrpInputs();
+    const { requirements, skipped, noBomExamples } = buildRequirements(orders, bomParents, {
+      today, horizonDays, includeUnconfirmed, applyWastage,
+    });
+    const { skuResults, suggestedPOs, atRiskOrders } = allocateAndPlan(requirements, onHandBySku, supply, today);
+
+    res.json({
+      ok: true,
+      runAt: new Date().toISOString(),
+      today,
+      settings: { includeUnconfirmed, applyWastage, horizonDays },
+      summary: {
+        ordersConsidered: orders.length - (skipped.unconfirmed + skipped.complete + skipped.noStart + skipped.outsideHorizon + skipped.noBom),
+        ordersSkipped: skipped,
+        noBomExamples,
+        requirementCount: requirements.length,
+        skuCount: skuResults.length,
+        atRiskOrderCount: atRiskOrders.length,
+        suggestedPoCount: suggestedPOs.length,
+        overduePoCount: suggestedPOs.filter(p => p.isOverdue).length,
+      },
+      suggestedPOs,
+      atRiskOrders,
+      skuResults,
+    });
+  } catch (e) {
+    console.error("[mrp] Run failed:", e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
