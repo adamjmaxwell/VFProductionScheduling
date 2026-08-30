@@ -243,6 +243,101 @@ app.post("/api/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+// Read-only machine contract for FMDS. This route deliberately lives outside
+// the human session flow and exposes only an allowlisted plan projection.
+function safeString(value) {
+  if (value === null || value === undefined || value === "") return null;
+  return String(value);
+}
+
+function decimalString(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number" && !Number.isFinite(value)) return null;
+  return String(value);
+}
+
+function secretsEqual(left, right) {
+  const leftDigest = crypto.createHash("sha256").update(String(left)).digest();
+  const rightDigest = crypto.createHash("sha256").update(String(right)).digest();
+  return crypto.timingSafeEqual(leftDigest, rightDigest);
+}
+
+function authenticateFmdsPlanExport(req, res, next) {
+  const configuredToken = process.env.FMDS_PLAN_EXPORT_TOKEN;
+  if (!configuredToken || !configuredToken.trim()) {
+    return res.status(503).json({
+      ok: false,
+      error: "FMDS plan export is not configured",
+    });
+  }
+
+  const authorization = req.get("Authorization") || "";
+  const match = authorization.match(/^Bearer\s+([^\s]+)$/i);
+  if (!match || !secretsEqual(match[1], configuredToken)) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  }
+  next();
+}
+
+function buildFmdsPlanExport() {
+  const sourceOrders = readData("vf_orders");
+  const orders = (Array.isArray(sourceOrders) ? sourceOrders : []).map((row) => ({
+    externalRowId: safeString(row.id),
+    orderId: safeString(row.orderId),
+    sku: safeString(row.sku),
+    machine: safeString(row.machine),
+    startDate: safeString(row.start),
+    endDate: safeString(row.end),
+    dueDate: safeString(row.due),
+    batchQuantity: decimalString(row.qty),
+    batchCount: decimalString(row.batches),
+    plannedQuantity: decimalString(row.total),
+    status: safeString(row.status),
+    confirmed: typeof row.confirmed === "boolean" ? row.confirmed : null,
+    priority: safeString(row.priority),
+    category: safeString(row.cat ?? row.category),
+    subcategory: safeString(row.sub ?? row.subcategory),
+    region: safeString(row.region),
+    temper: safeString(row.temper),
+    notes: safeString(row.notes),
+  }));
+  const sourceRevision = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(orders))
+    .digest("hex");
+
+  let generatedAt = null;
+  try {
+    generatedAt = fs.statSync(path.join(DATA_DIR, "vf_orders.json")).mtime.toISOString();
+  } catch (_error) {
+    // A missing source file is a valid empty plan, represented by null metadata.
+  }
+
+  return {
+    ok: true,
+    contractVersion: "1",
+    source: "vf-production-scheduling",
+    sourceRevision,
+    generatedAt,
+    orderCount: orders.length,
+    orders,
+  };
+}
+
+app.get(
+  "/api/integrations/fmds/v1/production-plan",
+  authenticateFmdsPlanExport,
+  (_req, res) => {
+    const payload = buildFmdsPlanExport();
+    const etag = `"${payload.sourceRevision}"`;
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("ETag", etag);
+    res.setHeader("X-Contract-Version", payload.contractVersion);
+    if (_req.get("If-None-Match") === etag) return res.status(304).end();
+    res.json(payload);
+  },
+);
+
 // Everything else under /api/* requires authentication, except a small set
 // of webhook endpoints that have their own auth (shared secret in header).
 const SESSION_BYPASS_PATHS = new Set([
