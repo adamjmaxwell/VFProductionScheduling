@@ -253,7 +253,49 @@ function safeString(value) {
 function decimalString(value) {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "number" && !Number.isFinite(value)) return null;
-  return String(value);
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+function parseDecimal(value) {
+  const normalized = decimalString(value);
+  if (normalized === null) return null;
+  const match = normalized.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
+  if (!match) return null;
+  const fractional = match[3] || "";
+  const coefficient = BigInt(`${match[2]}${fractional}`) * (match[1] === "-" ? -1n : 1n);
+  return { coefficient, scale: fractional.length };
+}
+
+function multiplyDecimalStrings(left, right) {
+  const parsedLeft = parseDecimal(left);
+  const parsedRight = parseDecimal(right);
+  if (!parsedLeft || !parsedRight) return null;
+
+  const product = parsedLeft.coefficient * parsedRight.coefficient;
+  if (product === 0n) return "0";
+
+  const negative = product < 0n;
+  const scale = parsedLeft.scale + parsedRight.scale;
+  const digits = (negative ? -product : product).toString().padStart(scale + 1, "0");
+  let normalized;
+  if (scale === 0) {
+    normalized = digits;
+  } else {
+    const whole = digits.slice(0, -scale);
+    const fractional = digits.slice(-scale).replace(/0+$/, "");
+    normalized = fractional ? `${whole}.${fractional}` : whole;
+  }
+  return negative ? `-${normalized}` : normalized;
+}
+
+function plannedQuantityString(row) {
+  const total = parseDecimal(row.total);
+  if (total && total.coefficient > 0n) return decimalString(row.total);
+  const batches = row.batches === null || row.batches === undefined || row.batches === ""
+    ? "1"
+    : row.batches;
+  return multiplyDecimalStrings(row.qty ?? "0", batches);
 }
 
 function secretsEqual(left, right) {
@@ -263,8 +305,8 @@ function secretsEqual(left, right) {
 }
 
 function authenticateFmdsPlanExport(req, res, next) {
-  const configuredToken = process.env.FMDS_PLAN_EXPORT_TOKEN;
-  if (!configuredToken || !configuredToken.trim()) {
+  const configuredToken = (process.env.FMDS_PLAN_EXPORT_TOKEN || "").trim();
+  if (configuredToken.length < 32) {
     return res.status(503).json({
       ok: false,
       error: "FMDS plan export is not configured",
@@ -280,8 +322,17 @@ function authenticateFmdsPlanExport(req, res, next) {
 }
 
 function buildFmdsPlanExport() {
-  const sourceOrders = readData("vf_orders");
-  const orders = (Array.isArray(sourceOrders) ? sourceOrders : []).map((row) => ({
+  const sourceFile = path.join(DATA_DIR, "vf_orders.json");
+  if (!fs.existsSync(sourceFile)) {
+    throw new Error("vf_orders.json is missing");
+  }
+  const sourceOrders = JSON.parse(fs.readFileSync(sourceFile, "utf8"));
+  if (!Array.isArray(sourceOrders)) {
+    throw new Error("vf_orders.json must contain an array");
+  }
+  const generatedAt = fs.statSync(sourceFile).mtime.toISOString();
+
+  const orders = sourceOrders.map((row) => ({
     externalRowId: safeString(row.id),
     orderId: safeString(row.orderId),
     sku: safeString(row.sku),
@@ -291,7 +342,7 @@ function buildFmdsPlanExport() {
     dueDate: safeString(row.due),
     batchQuantity: decimalString(row.qty),
     batchCount: decimalString(row.batches),
-    plannedQuantity: decimalString(row.total),
+    plannedQuantity: plannedQuantityString(row),
     status: safeString(row.status),
     confirmed: typeof row.confirmed === "boolean" ? row.confirmed : null,
     priority: safeString(row.priority),
@@ -305,13 +356,6 @@ function buildFmdsPlanExport() {
     .createHash("sha256")
     .update(JSON.stringify(orders))
     .digest("hex");
-
-  let generatedAt = null;
-  try {
-    generatedAt = fs.statSync(path.join(DATA_DIR, "vf_orders.json")).mtime.toISOString();
-  } catch (_error) {
-    // A missing source file is a valid empty plan, represented by null metadata.
-  }
 
   return {
     ok: true,
@@ -327,14 +371,22 @@ function buildFmdsPlanExport() {
 app.get(
   "/api/integrations/fmds/v1/production-plan",
   authenticateFmdsPlanExport,
-  (_req, res) => {
-    const payload = buildFmdsPlanExport();
-    const etag = `"${payload.sourceRevision}"`;
-    res.setHeader("Cache-Control", "private, no-store");
-    res.setHeader("ETag", etag);
-    res.setHeader("X-Contract-Version", payload.contractVersion);
-    if (_req.get("If-None-Match") === etag) return res.status(304).end();
-    res.json(payload);
+  (req, res) => {
+    try {
+      const payload = buildFmdsPlanExport();
+      const etag = `"${payload.sourceRevision}"`;
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("ETag", etag);
+      res.setHeader("X-Contract-Version", payload.contractVersion);
+      if (req.get("If-None-Match") === etag) return res.status(304).end();
+      res.json(payload);
+    } catch (error) {
+      console.error("[fmds-plan-export] Could not read source plan:", error.message);
+      res.status(500).json({
+        ok: false,
+        error: "FMDS plan export is unavailable",
+      });
+    }
   },
 );
 

@@ -5,7 +5,7 @@ const app = require("./server");
 
 const DATA_DIR = path.join(__dirname, "data");
 const ORDERS_FILE = path.join(DATA_DIR, "vf_orders.json");
-const EXPORT_TOKEN = "test-fmds-plan-export-token";
+const EXPORT_TOKEN = "test-fmds-plan-export-token-with-32-chars";
 
 let originalOrdersFile;
 let ordersFileExisted;
@@ -142,6 +142,20 @@ describe("FMDS production plan export", () => {
     });
   });
 
+  test("fails closed when the configured export token is too short", async () => {
+    process.env.FMDS_PLAN_EXPORT_TOKEN = "too-short";
+
+    const response = await request(app)
+      .get("/api/integrations/fmds/v1/production-plan")
+      .set("Authorization", "Bearer too-short");
+
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({
+      ok: false,
+      error: "FMDS plan export is not configured",
+    });
+  });
+
   test.each([
     ["missing", undefined],
     ["malformed", "Basic abc123"],
@@ -233,5 +247,45 @@ describe("FMDS production plan export", () => {
     expect(cachedResponse.status).toBe(304);
     expect(cachedResponse.headers.etag).toBe(firstResponse.headers.etag);
     expect(cachedResponse.text).toBe("");
+  });
+
+  test("computes legacy planned quantities without floating-point math", async () => {
+    fs.writeFileSync(
+      ORDERS_FILE,
+      JSON.stringify([
+        {
+          id: "legacy-row",
+          orderId: "MO-LEGACY",
+          qty: "325.500",
+          batches: "18",
+        },
+      ]),
+    );
+
+    const response = await request(app)
+      .get("/api/integrations/fmds/v1/production-plan")
+      .set("Authorization", `Bearer ${EXPORT_TOKEN}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.orders[0].plannedQuantity).toBe("5859");
+  });
+
+  test.each([
+    ["a missing source file", null],
+    ["malformed JSON", "{not-json"],
+    ["a non-array source", JSON.stringify({ orders: [] })],
+  ])("does not report %s as an empty plan", async (_label, source) => {
+    if (source === null) fs.unlinkSync(ORDERS_FILE);
+    else fs.writeFileSync(ORDERS_FILE, source);
+
+    const response = await request(app)
+      .get("/api/integrations/fmds/v1/production-plan")
+      .set("Authorization", `Bearer ${EXPORT_TOKEN}`);
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({
+      ok: false,
+      error: "FMDS plan export is unavailable",
+    });
   });
 });
