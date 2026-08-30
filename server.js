@@ -243,6 +243,153 @@ app.post("/api/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+// Read-only machine contract for FMDS. This route deliberately lives outside
+// the human session flow and exposes only an allowlisted plan projection.
+function safeString(value) {
+  if (value === null || value === undefined || value === "") return null;
+  return String(value);
+}
+
+function decimalString(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number" && !Number.isFinite(value)) return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+function parseDecimal(value) {
+  const normalized = decimalString(value);
+  if (normalized === null) return null;
+  const match = normalized.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
+  if (!match) return null;
+  const fractional = match[3] || "";
+  const coefficient = BigInt(`${match[2]}${fractional}`) * (match[1] === "-" ? -1n : 1n);
+  return { coefficient, scale: fractional.length };
+}
+
+function multiplyDecimalStrings(left, right) {
+  const parsedLeft = parseDecimal(left);
+  const parsedRight = parseDecimal(right);
+  if (!parsedLeft || !parsedRight) return null;
+
+  const product = parsedLeft.coefficient * parsedRight.coefficient;
+  if (product === 0n) return "0";
+
+  const negative = product < 0n;
+  const scale = parsedLeft.scale + parsedRight.scale;
+  const digits = (negative ? -product : product).toString().padStart(scale + 1, "0");
+  let normalized;
+  if (scale === 0) {
+    normalized = digits;
+  } else {
+    const whole = digits.slice(0, -scale);
+    const fractional = digits.slice(-scale).replace(/0+$/, "");
+    normalized = fractional ? `${whole}.${fractional}` : whole;
+  }
+  return negative ? `-${normalized}` : normalized;
+}
+
+function plannedQuantityString(row) {
+  const total = parseDecimal(row.total);
+  if (total && total.coefficient > 0n) return decimalString(row.total);
+  const batches = row.batches === null || row.batches === undefined || row.batches === ""
+    ? "1"
+    : row.batches;
+  return multiplyDecimalStrings(row.qty ?? "0", batches);
+}
+
+function secretsEqual(left, right) {
+  const leftDigest = crypto.createHash("sha256").update(String(left)).digest();
+  const rightDigest = crypto.createHash("sha256").update(String(right)).digest();
+  return crypto.timingSafeEqual(leftDigest, rightDigest);
+}
+
+function authenticateFmdsPlanExport(req, res, next) {
+  const configuredToken = (process.env.FMDS_PLAN_EXPORT_TOKEN || "").trim();
+  if (configuredToken.length < 32) {
+    return res.status(503).json({
+      ok: false,
+      error: "FMDS plan export is not configured",
+    });
+  }
+
+  const authorization = req.get("Authorization") || "";
+  const match = authorization.match(/^Bearer\s+([^\s]+)$/i);
+  if (!match || !secretsEqual(match[1], configuredToken)) {
+    return res.status(401).json({ ok: false, error: "Unauthorized" });
+  }
+  next();
+}
+
+function buildFmdsPlanExport() {
+  const sourceFile = path.join(DATA_DIR, "vf_orders.json");
+  if (!fs.existsSync(sourceFile)) {
+    throw new Error("vf_orders.json is missing");
+  }
+  const sourceOrders = JSON.parse(fs.readFileSync(sourceFile, "utf8"));
+  if (!Array.isArray(sourceOrders)) {
+    throw new Error("vf_orders.json must contain an array");
+  }
+  const generatedAt = fs.statSync(sourceFile).mtime.toISOString();
+
+  const orders = sourceOrders.map((row) => ({
+    externalRowId: safeString(row.id),
+    orderId: safeString(row.orderId),
+    sku: safeString(row.sku),
+    machine: safeString(row.machine),
+    startDate: safeString(row.start),
+    endDate: safeString(row.end),
+    dueDate: safeString(row.due),
+    batchQuantity: decimalString(row.qty),
+    batchCount: decimalString(row.batches),
+    plannedQuantity: plannedQuantityString(row),
+    status: safeString(row.status),
+    confirmed: typeof row.confirmed === "boolean" ? row.confirmed : null,
+    priority: safeString(row.priority),
+    category: safeString(row.cat ?? row.category),
+    subcategory: safeString(row.sub ?? row.subcategory),
+    region: safeString(row.region),
+    temper: safeString(row.temper),
+    notes: safeString(row.notes),
+  }));
+  const sourceRevision = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(orders))
+    .digest("hex");
+
+  return {
+    ok: true,
+    contractVersion: "1",
+    source: "vf-production-scheduling",
+    sourceRevision,
+    generatedAt,
+    orderCount: orders.length,
+    orders,
+  };
+}
+
+app.get(
+  "/api/integrations/fmds/v1/production-plan",
+  authenticateFmdsPlanExport,
+  (req, res) => {
+    try {
+      const payload = buildFmdsPlanExport();
+      const etag = `"${payload.sourceRevision}"`;
+      res.setHeader("Cache-Control", "private, no-store");
+      res.setHeader("ETag", etag);
+      res.setHeader("X-Contract-Version", payload.contractVersion);
+      if (req.get("If-None-Match") === etag) return res.status(304).end();
+      res.json(payload);
+    } catch (error) {
+      console.error("[fmds-plan-export] Could not read source plan:", error.message);
+      res.status(500).json({
+        ok: false,
+        error: "FMDS plan export is unavailable",
+      });
+    }
+  },
+);
+
 // Everything else under /api/* requires authentication, except a small set
 // of webhook endpoints that have their own auth (shared secret in header).
 const SESSION_BYPASS_PATHS = new Set([
