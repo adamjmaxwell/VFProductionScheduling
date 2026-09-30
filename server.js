@@ -1,4 +1,6 @@
 const express = require("express");
+const { hostedAuth } = require("./hosted-auth");
+const FMDS_HOSTED = process.env.FMDS_HOSTED === "true";
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
@@ -114,6 +116,7 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+app.use(hostedAuth());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -191,6 +194,7 @@ function parseCookies(header) {
 }
 
 function getSessionUserId(req) {
+  if (req.fmdsUser) return req.fmdsUser.id;
   const cookies = parseCookies(req.headers.cookie);
   return verifySession(cookies[SESSION_COOKIE]);
 }
@@ -221,7 +225,7 @@ function seedDefaultAdminIfMissing() {
   writeData("vf_users", [defaultUser]);
   console.log("[auth] Seeded default admin user 'productionadmin' (no prior users found).");
 }
-seedDefaultAdminIfMissing();
+if (!FMDS_HOSTED) seedDefaultAdminIfMissing();
 
 // Public auth endpoints (registered BEFORE the requireAuth middleware below).
 app.post("/api/login", (req, res) => {
@@ -260,6 +264,7 @@ app.use("/api", (req, res, next) => {
 
 // GET /api/me — used by the front-end to resume a session on page load.
 app.get("/api/me", (req, res) => {
+  if (req.fmdsUser) return res.json({ ok: true, user: req.fmdsUser, hosted: true });
   const users = readData("vf_users") || [];
   const u = users.find(x => x && x.id === req.userId);
   if (!u) return res.status(401).json({ ok: false, error: "User no longer exists" });
@@ -308,6 +313,7 @@ const AUDITED_FIELDS = [
 ];
 
 function actorFromRequest(req) {
+  if (req.fmdsUser) return { userId: req.fmdsUser.id, userName: req.fmdsUser.username };
   const users = readData("vf_users") || [];
   const u = users.find(x => x && x.id === req.userId);
   return {
@@ -1356,6 +1362,7 @@ async function performCin7OnHandSync() {
 
 // Admin-only middleware
 function requireAdmin(req, res, next) {
+  if (req.fmdsUser) return req.fmdsUser.role === "admin" ? next() : res.status(403).json({ ok: false, error: "FMDS planner edit permission required" });
   const users = readData("vf_users") || [];
   const u = users.find(x => x && x.id === req.userId);
   if (!u || u.role !== "admin") {

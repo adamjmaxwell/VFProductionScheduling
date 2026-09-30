@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Barlow+Condensed:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="/voyage-tokens.css">
+<link rel="stylesheet" href="voyage-tokens.css">
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -1506,7 +1506,7 @@ function togglePwReveal(inputId, btn){
 
 async function serverGet(key){
   try{
-    const r=await fetch('/api/data/'+key);
+    const r=await fetch('api/data/'+key);
     if(!r.ok)return null;
     const j=await r.json();
     return j.exists?j.value:null;
@@ -1515,7 +1515,7 @@ async function serverGet(key){
 async function serverPut(key,value,extra){
   try{
     const body = Object.assign({value}, extra || {});
-    const r=await fetch('/api/data/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const r=await fetch('api/data/'+key,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     return r.ok;
   }catch(e){return false;}
 }
@@ -1553,13 +1553,14 @@ async function doLogin(){
   if(!username||!password){errEl.textContent='Please enter username and password.';return;}
   errEl.textContent='Signing in…';
   try{
-    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+    const r=await fetch('api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
     if(!r.ok){
       const j=await r.json().catch(()=>({}));
       errEl.textContent=j.error||'Invalid username or password.';
       return;
     }
     const j=await r.json();
+    window.fmdsHosted=j.hosted===true;
     await loadUsers();
     currentUser=users.find(u=>u.id===j.user.id)||j.user;
     errEl.textContent='';
@@ -1569,7 +1570,8 @@ async function doLogin(){
   }
 }
 async function doLogout(){
-  try{await fetch('/api/logout',{method:'POST'});}catch(e){}
+  if(window.fmdsHosted){window.location.assign('/');return;}
+  try{await fetch('api/logout',{method:'POST'});}catch(e){}
   currentUser=null;
   document.getElementById('main-app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
@@ -1579,9 +1581,10 @@ async function doLogout(){
 }
 async function tryResumeSession(){
   try{
-    const r=await fetch('/api/me');
+    const r=await fetch('api/me');
     if(!r.ok)return false;
     const j=await r.json();
+    window.fmdsHosted=j.hosted===true;
     await loadUsers();
     currentUser=users.find(u=>u.id===j.user.id)||j.user;
     showApp();
@@ -1712,7 +1715,7 @@ function deleteUser(id){
 let auditEntries = [];
 async function loadAuditLog(){
   try {
-    const r = await fetch('/api/audit-log');
+    const r = await fetch('api/audit-log');
     if (!r.ok) { auditEntries = []; renderAuditLog(); return; }
     const j = await r.json();
     auditEntries = j.entries || [];
@@ -1868,7 +1871,7 @@ let inventoryCompletedMOs = new Set();
 
 async function loadInventoryCompletion(){
   try{
-    const r = await fetch('/api/data/inventory');
+    const r = await fetch('api/data/inventory');
     if(!r.ok) return;
     const j = await r.json();
     const moMovements = (j && j.exists && j.value && j.value.moMovements) ? j.value.moMovements : {};
@@ -2374,7 +2377,7 @@ async function processImportFile(file){
   const fd=new FormData();
   fd.append('file',file);
   try{
-    const r=await fetch('/api/import-excel/parse',{method:'POST',body:fd});
+    const r=await fetch('api/import-excel/parse',{method:'POST',body:fd});
     const data=await r.json();
     if(!data.ok)throw new Error(data.error||'Parse failed');
     showImportPreview(data.orders);
@@ -2445,7 +2448,7 @@ function importToggleAll(checked){
 
 async function loadSyncStatus() {
   try {
-    const s = await fetch('/api/sync-cin7/status').then(r => r.json());
+    const s = await fetch('api/sync-cin7/status').then(r => r.json());
     const el = document.getElementById('cin7-sync-ts');
     if (!el) return;
     if (s && s.lastSync) {
@@ -2464,7 +2467,7 @@ async function triggerCin7Sync() {
   btn.textContent = '⟳ Syncing…';
   if (ts) ts.textContent = 'Syncing…';
   try {
-    const resp = await fetch('/api/sync-cin7', { method: 'POST' });
+    const resp = await fetch('api/sync-cin7', { method: 'POST' });
     const data = await resp.json();
     if (data.ok) {
       const d = new Date(data.lastSync);
@@ -2511,7 +2514,7 @@ async function runMrp() {
   const tsEl = document.getElementById('mrp-run-ts');
   tsEl.textContent = 'Running…';
   try {
-    const r = await fetch('/api/mrp/run?' + params.toString());
+    const r = await fetch('api/mrp/run?' + params.toString());
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || ('HTTP ' + r.status));
     mrpData = j;
@@ -2656,8 +2659,8 @@ let mrpSetupSection = 'boms';
 async function loadMrpSetup() {
   try {
     const [b, s] = await Promise.all([
-      fetch('/api/boms').then(r => r.json()),
-      fetch('/api/supply-settings').then(r => r.json()),
+      fetch('api/boms').then(r => r.json()),
+      fetch('api/supply-settings').then(r => r.json()),
     ]);
     mrpBomsData = b;
     mrpSupplyData = s;
@@ -2919,7 +2922,7 @@ async function saveMrpSupply() {
   clearTimeout(mrpSupplySaveTimer);
   mrpSupplySaveTimer = setTimeout(async () => {
     try {
-      const r = await fetch('/api/supply-settings', {
+      const r = await fetch('api/supply-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ defaults, perSku: mrpSupplyData.perSku }),
@@ -2953,7 +2956,7 @@ async function runMrpExpand() {
   }
   out.innerHTML = '<div style="font-size:12px;color:var(--vf-text-tertiary);margin-top:8px;">Expanding…</div>';
   try {
-    const r = await fetch('/api/boms/expand?sku=' + encodeURIComponent(sku) + '&qty=' + qty + (wastage?'':'&wastage=0'));
+    const r = await fetch('api/boms/expand?sku=' + encodeURIComponent(sku) + '&qty=' + qty + (wastage?'':'&wastage=0'));
     const j = await r.json();
     if (!j.ok) { out.innerHTML = '<div class="warn" style="margin-top:8px;">' + escapeHtml(j.error||'Expand failed') + '</div>'; return; }
     const leaves = Object.values(j.leaves).sort((a,b) => b.qty - a.qty);
@@ -2993,7 +2996,7 @@ async function loadLiveInventory() {
   const btn = document.getElementById('live-inv-sync-btn');
   if (btn) btn.style.display = (currentUser && currentUser.role === 'admin') ? 'inline-flex' : 'none';
   try {
-    const r = await fetch('/api/cin7/onhand');
+    const r = await fetch('api/cin7/onhand');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     liveInventoryData = await r.json();
   } catch (e) {
@@ -3008,7 +3011,7 @@ async function syncLiveInventory() {
   if (btn) { btn.disabled = true; btn.textContent = '⟳ Syncing…'; }
   if (ts) ts.textContent = 'Syncing from Cin7…';
   try {
-    const r = await fetch('/api/cin7/onhand/sync', { method: 'POST' });
+    const r = await fetch('api/cin7/onhand/sync', { method: 'POST' });
     const j = await r.json();
     if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
     await loadLiveInventory();
@@ -3172,7 +3175,7 @@ async function renderMOStatus() {
   // Load inventory movements from server (or use D.moMovements if loaded by traceability tab)
   let moMovements = {};
   try {
-    const inv = await fetch('/api/data/inventory').then(r => r.json());
+    const inv = await fetch('api/data/inventory').then(r => r.json());
     moMovements = (inv.exists && inv.value && inv.value.moMovements) ? inv.value.moMovements : {};
   } catch(e) {}
 
@@ -3591,7 +3594,7 @@ async function sendAIMessage() {
   addTypingIndicator();
 
   try {
-    const resp = await fetch('/api/chat', {
+    const resp = await fetch('api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: aiMessages }),

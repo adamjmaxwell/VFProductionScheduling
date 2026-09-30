@@ -507,13 +507,13 @@ function InvUploadModal({ onClose, onUploaded }) {
       let finalData;
       if (mode === "merge") {
         // Load existing persisted data to merge with
-        const existing = await fetch("/api/data/inventory").then(r => r.json());
+        const existing = await fetch("api/data/inventory").then(r => r.json());
         const base = (existing.exists && existing.value) ? existing.value : { invSku: D.invSku, invCat: D.invCat, invRt: D.invRt, months: D.months };
         finalData = mergeInventoryData(base, parsed);
       } else {
         finalData = { invSku: parsed.invSku, invCat: parsed.invCat, invRt: parsed.invRt, months: parsed.months, moMovements: parsed.moMovements || {} };
       }
-      const res = await fetch("/api/data/inventory", {
+      const res = await fetch("api/data/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: finalData }),
@@ -904,7 +904,7 @@ function App() {
   const [invUpdated,setInvUpdated]=useState(0);
 
   useEffect(()=>{
-    fetch("/api/data/inventory").then(r=>r.json()).then(d=>{
+    fetch("api/data/inventory").then(r=>r.json()).then(d=>{
       if(d.exists&&d.value){
         D.invSku=d.value.invSku;D.invCat=d.value.invCat;D.invRt=d.value.invRt;D.months=d.value.months;if(d.value.moMovements)D.moMovements=d.value.moMovements;
         setInvUpdated(c=>c+1);
